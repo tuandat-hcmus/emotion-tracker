@@ -1,0 +1,1 @@
+"""Emotion backend application package."""
