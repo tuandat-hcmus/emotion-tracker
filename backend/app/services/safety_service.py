@@ -12,6 +12,12 @@ def detect_safety_risk(transcript: str) -> dict[str, str | list[str]]:
         "không muốn sống nữa",
         "giet ban than",
         "giết bản thân",
+        "want to die",
+        "kill myself",
+        "end my life",
+        "don't want to live anymore",
+        "do not want to live anymore",
+        "suicide",
     ]
     medium_risk_patterns = [
         "bien mat",
@@ -26,6 +32,12 @@ def detect_safety_risk(transcript: str) -> dict[str, str | list[str]]:
         "muốn bỏ hết",
         "qua tuyet vong",
         "quá tuyệt vọng",
+        "disappear",
+        "hopeless",
+        "nothing matters",
+        "no one needs me",
+        "give up on everything",
+        "too hopeless",
     ]
 
     high_flags = [pattern for pattern in high_risk_patterns if pattern in normalized]
@@ -42,12 +54,12 @@ def detect_safety_risk(transcript: str) -> dict[str, str | list[str]]:
 def generate_safe_support_message(risk_level: str) -> str:
     if risk_level == "high":
         return (
-            "Mình rất lưu ý đến mức độ nghiêm trọng trong điều bạn vừa nói. "
-            "Ngay lúc này, hãy ưu tiên ở gần một người bạn tin tưởng hoặc liên hệ dịch vụ hỗ trợ khẩn cấp tại nơi bạn đang ở."
+            "I'm taking the seriousness of what you just said seriously. "
+            "Right now, please prioritize staying near someone you trust or contacting emergency support where you are."
         )
     if risk_level == "medium":
         return (
-            "Nghe như bạn đang ở trong một khoảng rất khó khăn. "
-            "Nếu có thể, hãy tìm một người đáng tin để ở cùng hoặc lắng nghe bạn trong lúc này."
+            "It sounds like you're in a very difficult place right now. "
+            "If you can, please reach out to someone you trust to stay with you or listen right now."
         )
     return ""

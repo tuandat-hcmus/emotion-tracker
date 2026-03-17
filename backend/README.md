@@ -23,6 +23,7 @@ Backend MVP for a voice journal / emotional companion app built with FastAPI, SQ
 - Deterministic demo seed script for smoke/manual testing
 - Optional dev-only demo seed/reset endpoints
 - Richer multi-signal emotion analysis
+- Model-driven AI emotion core with language routing and optional fusion hooks
 - Structured empathy planning and response generation
 - Dev-friendly text-only response preview endpoint
 - User tree state endpoint
@@ -36,6 +37,7 @@ Backend MVP for a voice journal / emotional companion app built with FastAPI, SQ
 - Alembic migrations
 - Mock or provider-based speech-to-text
 - Heuristic emotion analysis
+- Hugging Face model-driven text emotion inference with graceful fallback
 - Heuristic topic tagging
 - Mock or provider-based empathetic response generation
 - Rule-based safety detection
@@ -71,6 +73,12 @@ uploads/
 
 ```bash
 pip install -r requirements.txt
+```
+
+For model-driven local emotion inference, also install:
+
+```bash
+pip install -r requirements-ai.txt
 ```
 
 3. Apply migrations:
@@ -137,6 +145,43 @@ OPENAI_API_KEY=
 OPENAI_TEXT_MODEL=gpt-4o-mini
 OPENAI_AUDIO_MODEL=gpt-4o-mini-transcribe
 OPENAI_REQUEST_TIMEOUT_SECONDS=30
+EMOTION_PROVIDER=model_local
+ENABLE_CANONICAL_MODELS=true
+ENABLE_PUBLIC_TEXT_MODELS=true
+ENABLE_TEXT_EMOTION=true
+ENABLE_AUDIO_EMOTION=false
+ENABLE_HEURISTIC_FALLBACK=true
+DEFAULT_TEXT_PROVIDER=public
+DEFAULT_AUDIO_PROVIDER=sensevoice
+DEFAULT_FALLBACK_PROVIDER=multilingual
+HF_HOME=
+MODEL_CACHE_DIR=
+HF_TOKEN=
+VI_PUBLIC_MODEL_PROVIDER=hf_pipeline
+VI_PUBLIC_MODEL_NAME=visolex/phobert-emotion
+VI_CANONICAL_MODEL_DIR=backend/models/vi_canonical_emotion
+VI_CANONICAL_BACKBONE=visolex/phobert-emotion
+ZH_PUBLIC_MODEL_PROVIDER=hf_pipeline
+ZH_PUBLIC_MODEL_NAME=Johnson8187/Chinese-Emotion-Small
+ZH_CANONICAL_MODEL_DIR=backend/models/zh_canonical_emotion
+ZH_CANONICAL_BACKBONE=Johnson8187/Chinese-Emotion-Small
+MULTILINGUAL_MODEL_PROVIDER=hf_pipeline
+MULTILINGUAL_MODEL_NAME=MilaNLProc/xlm-emo-t
+SUPPORTED_VI_MODELS=visolex/phobert-emotion,uitnlp/visobert,vinai/phobert-large
+SUPPORTED_ZH_MODELS=Johnson8187/Chinese-Emotion-Small,hfl/chinese-roberta-wwm-ext,Langboat/mengzi-bert-base
+SUPPORTED_MULTILINGUAL_MODELS=MilaNLProc/xlm-emo-t
+SUPPORTED_AUDIO_MODELS=SenseVoiceSmall
+CANONICAL_MODEL_ROOT=models
+CANONICAL_CONFIDENCE_THRESHOLD=0.58
+CANONICAL_HYBRID_WEIGHT=0.7
+AUDIO_EMOTION_PROVIDER=sensevoice
+AUDIO_EMOTION_MODEL_NAME=SenseVoiceSmall
+AUDIO_STT_PROVIDER=existing
+AUDIO_USE_TEXT_TRANSCRIPT=true
+AI_CONFIDENCE_THRESHOLD=0.50
+AI_LOW_CONFIDENCE_HYBRID=true
+AI_DEVICE=cpu
+AI_BATCH_SIZE=4
 MAX_UPLOAD_MB=20
 ALLOWED_AUDIO_EXTENSIONS=.wav,.mp3,.m4a,.ogg,.webm
 JWT_SECRET_KEY=dev-secret-change-me
@@ -154,6 +199,134 @@ Provider notes:
 - `openai` mode is optional and only used when `STT_PROVIDER=openai` or `RESPONSE_PROVIDER=openai`.
 - Real provider mode requires `OPENAI_API_KEY` and the `openai` Python package.
 - If a real provider call fails during processing, the journal entry is marked `failed` and the API returns a clear error response.
+- The AI emotion core uses lazy Hugging Face model loading and does not download models at import time.
+- If transformers or local models are unavailable, text emotion inference degrades to a deterministic heuristic fallback so local development still works.
+- `ENABLE_AUDIO_EMOTION=false` keeps the optional audio branch disabled; the fusion layer automatically falls back to text-only when audio inference is unavailable.
+
+## AI Core
+
+The backend now uses a model-shaped AI core under `app/services/ai_core/`.
+
+- Product canonical schema:
+  - `joy`
+  - `sadness`
+  - `anxiety`
+  - `anger`
+  - `overwhelm`
+  - `gratitude`
+  - `loneliness`
+  - `neutral`
+- Config-driven inference order:
+  - canonical fine-tuned model for the detected language, if enabled and artifacts exist
+  - selected public language-specific model for the detected language
+  - selected multilingual fallback model
+  - heuristic fallback as the final safety net
+- Directly runnable public classifiers:
+  - Vietnamese: `visolex/phobert-emotion`
+  - Chinese: `Johnson8187/Chinese-Emotion-Small`
+  - Multilingual: `MilaNLProc/xlm-emo-t`
+- Supported fine-tuning backbones only:
+  - Vietnamese: `uitnlp/visobert`, `vinai/phobert-large`
+  - Chinese: `hfl/chinese-roberta-wwm-ext`, `Langboat/mengzi-bert-base`
+- Audio provider targets:
+  - `SenseVoiceSmall` is represented in the registry and selected by config, but this repo currently keeps audio emotion non-blocking unless a runtime integration is added.
+- The public HF models are treated as weak supervision / fallback paths, not direct product truth.
+- Canonical training data lives in:
+  - `datasets/canonical_emotion_seed_vi.jsonl`
+  - `datasets/canonical_emotion_seed_zh.jsonl`
+- Annotation rules live in `datasets/ANNOTATION_GUIDE.md`
+- Language detection is lightweight and runtime-safe.
+- Canonical normalized output includes:
+  - `language`
+  - `primary_emotion`
+  - `secondary_emotions`
+  - `valence`
+  - `energy`
+  - `stress`
+  - `confidence`
+  - `source`
+  - `raw_model_labels`
+  - `provider_name`
+- Safety remains conservative and is still applied after emotion inference.
+- Response generation, tree recomputation, wrap-ups, and existing legacy fields continue to work from normalized AI output.
+- If the canonical head is low-confidence, inference records `low_confidence=true` in metadata and can blend with the current public-model route instead of silently presenting a weak prediction as strong.
+
+Pre-download models:
+
+```bash
+cd backend
+python -m scripts.download_models --list-supported
+python -m scripts.download_models --all --respect-config
+python -m scripts.download_models --model vi-public --respect-config
+python -m scripts.download_models --model zh-public --respect-config
+python -m scripts.download_models --model multilingual --respect-config
+python -m scripts.download_models --model audio --respect-config
+python -m scripts.download_models --model canonical --respect-config
+```
+
+Install AI dependencies:
+
+```bash
+pip install -r requirements.txt -r requirements-ai.txt
+```
+
+Train canonical models:
+
+```bash
+cd backend
+python -m training.train_canonical_emotion --language all
+```
+
+Model artifacts are written to:
+
+```text
+models/vi_canonical_emotion/
+models/zh_canonical_emotion/
+```
+
+Run the canonical benchmark and report:
+
+```bash
+python -m benchmarks.evaluate_canonical_models
+```
+
+Example config presets:
+
+Lightweight local CPU mode:
+```env
+ENABLE_CANONICAL_MODELS=true
+VI_PUBLIC_MODEL_NAME=visolex/phobert-emotion
+ZH_PUBLIC_MODEL_NAME=Johnson8187/Chinese-Emotion-Small
+MULTILINGUAL_MODEL_NAME=MilaNLProc/xlm-emo-t
+ENABLE_AUDIO_EMOTION=false
+AI_DEVICE=cpu
+```
+
+Stronger VI/ZH canonical mode:
+```env
+ENABLE_CANONICAL_MODELS=true
+VI_CANONICAL_BACKBONE=vinai/phobert-large
+ZH_CANONICAL_BACKBONE=hfl/chinese-roberta-wwm-ext
+VI_PUBLIC_MODEL_NAME=visolex/phobert-emotion
+ZH_PUBLIC_MODEL_NAME=Johnson8187/Chinese-Emotion-Small
+AI_LOW_CONFIDENCE_HYBRID=true
+```
+
+Multilingual fallback mode:
+```env
+ENABLE_CANONICAL_MODELS=false
+ENABLE_PUBLIC_TEXT_MODELS=true
+MULTILINGUAL_MODEL_NAME=MilaNLProc/xlm-emo-t
+DEFAULT_FALLBACK_PROVIDER=multilingual
+```
+
+Audio-enabled mode:
+```env
+ENABLE_AUDIO_EMOTION=true
+AUDIO_EMOTION_PROVIDER=sensevoice
+AUDIO_EMOTION_MODEL_NAME=SenseVoiceSmall
+AUDIO_USE_TEXT_TRANSCRIPT=true
+```
 
 Auth notes:
 - `AUTH_OPTIONAL_FOR_DEV=true` keeps local/dev flows easy: existing protected routes still work without a bearer token.
@@ -218,11 +391,13 @@ Journal history query params:
 - `GET /v1/me/calendar` builds directly from journal entries only, returns one item per requested day, and uses semantic mood tokens such as `bright`, `calm`, `neutral`, `low`, and `heavy` instead of raw UI colors.
 - Quotes are local curated templates only. If `quote_opt_in` is `false`, the home endpoint returns `"quote": null`. High-risk states use calm/supportive quote variants only.
 - Emotion analysis now uses deterministic multi-signal inference from transcript text and weighs cues such as loneliness, emptiness, overwhelm, frustration, exhaustion, gratitude, pride, calm, uncertainty, and mixed-contrast phrasing. It still returns additive fields such as `social_need_score`, `confidence`, `dominant_signals`, and `response_mode`.
+- The canonical AI output is model-driven first and then normalized into the app's existing downstream fields. Rule-based logic is now limited to safety escalation, light normalization, and legacy compatibility.
 - `response_mode` is a stable backend hint for tone selection. Current values include `validating_gentle`, `grounding_soft`, `supportive_reflective`, `celebratory_warm`, `low_energy_comfort`, and `high_risk_safe`.
 - Supportive response generation is separated into empathy, optional gentle suggestion, and optional quote. The mock path stays deterministic but now varies tone more naturally for lonely, overwhelmed, frustrated, positive, and mixed states. Existing `ai_response` is still populated for backward compatibility as a combined legacy field.
 - `POST /v1/me/respond-preview` reuses the real analysis/planning/response services but does not write journal history, mutate tree state, or create wrap-up data.
 - Mock mode remains deterministic and template-based for tests and local development. Provider mode can still be enabled for response generation and is normalized into the same structured response contract.
 - Transcript-only emotion inference is still heuristic and limited by what the user explicitly says. It should be treated as supportive product behavior, not as diagnosis, therapy, or clinical assessment.
+- The optional audio emotion path is scaffolded behind a provider interface but currently degrades gracefully to text-only unless a real audio provider is configured later.
 - Wrap-up generation is deterministic, heuristic/template-based, and non-LLM for now. Weekly periods use Monday-Sunday boundaries and monthly periods use calendar-month boundaries.
 - If no stored wrap-up exists yet, the latest weekly/monthly endpoints generate the current period on demand and persist it.
 - Wrap-up snapshots are stored in `wrapup_snapshots` and upserted per `user_id + period_type + period_start + period_end`.
@@ -358,3 +533,105 @@ python scripts/seed_demo_data.py --reset --days 30
 uvicorn app.main:app --reload
 pytest
 ```
+
+## English-First AI Core
+
+English is now the main product language.
+
+Primary product defaults:
+- `MAIN_LANGUAGE=en`
+- `AI_RENDER_LANGUAGE=en`
+- English public model: `SamLowe/roberta-base-go_emotions`
+- English secondary public model: `j-hartmann/emotion-english-distilroberta-base`
+- English canonical model dir: `backend/models/en_canonical_emotion`
+- English canonical backbone default: `roberta-base`
+
+Supported English public models:
+- `SamLowe/roberta-base-go_emotions`
+- `j-hartmann/emotion-english-distilroberta-base`
+- `j-hartmann/emotion-english-roberta-large`
+
+Run the English demo preset:
+
+```bash
+cp .env.demo.en.example .env
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+English demo request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/demo/ai-core \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text":"I have been carrying too many deadlines at once, and my brain has felt packed tight all day.",
+    "context_tag":"work/school"
+  }'
+```
+
+Run the curated English demo cases:
+
+```bash
+PYTHONPATH=backend python backend/scripts/demo_en_ai_core.py
+```
+
+The script writes:
+- `backend/reports/en_ai_core_demo.md`
+
+English canonical datasets:
+- `backend/datasets/canonical_emotion_seed_en.jsonl`
+- `backend/datasets/canonical_emotion_realistic_en.jsonl`
+
+English evaluation:
+
+```bash
+HF_HUB_OFFLINE=1 PYTHONPATH=backend python -m benchmarks.evaluate_canonical_models
+```
+
+Current note on the English canonical path:
+- The active English canonical directory exists and is loadable today.
+- In this repo snapshot it is promoted from the lightweight canonical head, not a transformer-fine-tuned English backbone yet.
+- The report makes that explicit through `training_mode` metadata.
+
+Optional Gemini rendering for the response layer:
+
+```env
+AI_CORE_DEMO_RESPONSE_PROVIDER=gemini
+GEMINI_API_KEY=your_key_here
+GEMINI_TEXT_MODEL=gemini-2.5-flash
+```
+
+Gemini is used only to render:
+- `empathetic_response`
+- `gentle_suggestion`
+
+Emotion inference still comes from the backend AI core. If Gemini is missing or fails, the demo path falls back to the built-in template renderer.
+In English-first mode, Gemini is the preferred renderer for normal low-risk demo requests.
+
+## Vietnamese Localization Demo
+
+Vietnamese is still supported as a secondary demo/localization layer.
+
+Run the Vietnamese preset:
+
+```bash
+cp .env.demo.vi.example .env
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+Run the curated Vietnamese demo cases:
+
+```bash
+PYTHONPATH=backend python backend/scripts/demo_vi_ai_core.py
+```
+
+The script writes:
+- `backend/reports/vi_ai_core_demo.md`
+
+Notes:
+- `/v1/demo/ai-core` is now English-first, but Vietnamese input is still routed to the VI demo service for compatibility.
+- Chinese is currently not part of the active product direction.
+- Safety handling remains conservative across English and Vietnamese paths.
+- This is a supportive wellness product, not diagnosis or therapy.

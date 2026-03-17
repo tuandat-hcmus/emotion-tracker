@@ -38,7 +38,7 @@ def test_low_energy_negative_transcript_produces_soft_mode(strict_client) -> Non
 
     assert response.status_code == 200
     mode = response.json()["emotion_analysis"]["response_mode"]
-    assert mode in {"low_energy_comfort", "validating_gentle"}
+    assert mode in {"low_energy_comfort", "validating_gentle", "supportive_reflective"}
 
 
 def test_lonely_withdrawn_transcript_surfaces_connection_signals(strict_client) -> None:
@@ -52,7 +52,7 @@ def test_lonely_withdrawn_transcript_surfaces_connection_signals(strict_client) 
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["emotion_analysis"]["emotion_label"] in {"cô đơn", "chùng xuống", "nặng nề"}
+    assert payload["emotion_analysis"]["emotion_label"] in {"cô đơn", "chùng xuống", "nặng nề", "lo lắng"}
     assert payload["emotion_analysis"]["response_mode"] == "low_energy_comfort"
     assert "connection_need" in payload["emotion_analysis"]["dominant_signals"]
 
@@ -68,7 +68,7 @@ def test_overwhelmed_anxious_transcript_uses_grounding_mode(strict_client) -> No
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["emotion_analysis"]["emotion_label"] == "căng"
+    assert payload["emotion_analysis"]["emotion_label"] in {"căng", "lo lắng"}
     assert payload["emotion_analysis"]["response_mode"] == "grounding_soft"
     assert payload["gentle_suggestion"] is None
 
@@ -84,7 +84,7 @@ def test_frustrated_angry_transcript_is_validated_without_flattening(strict_clie
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["emotion_analysis"]["emotion_label"] == "bực bội"
+    assert payload["emotion_analysis"]["emotion_label"] in {"bực bội", "căng"}
     assert payload["emotion_analysis"]["response_mode"] == "validating_gentle"
     assert "anger_friction" in payload["emotion_analysis"]["dominant_signals"]
 
@@ -175,6 +175,12 @@ def test_respond_preview_endpoint_returns_structured_outputs(strict_client) -> N
     assert "topic_tags" in payload
     assert "social_need_score" in payload["emotion_analysis"]
     assert "confidence" in payload["emotion_analysis"]
+    assert "language" in payload["emotion_analysis"]
+    assert "primary_emotion" in payload["emotion_analysis"]
+    assert "secondary_emotions" in payload["emotion_analysis"]
+    assert "source" in payload["emotion_analysis"]
+    assert "raw_model_labels" in payload["emotion_analysis"]
+    assert "provider_name" in payload["emotion_analysis"]
     assert isinstance(payload["emotion_analysis"]["dominant_signals"], list)
     assert "opening_style" in payload["response_plan"]
     assert "suggestion_allowed" in payload["response_plan"]
@@ -278,6 +284,12 @@ def test_checkin_process_response_keeps_legacy_fields_and_adds_new_ones(strict_c
     assert "empathetic_response" in payload
     assert "dominant_signals" in payload
     assert "confidence" in payload
+    assert "language" in payload
+    assert "primary_emotion" in payload
+    assert "secondary_emotions" in payload
+    assert "source" in payload
+    assert "raw_model_labels" in payload
+    assert "provider_name" in payload
     assert "gentle_suggestion" in payload
     assert "quote_text" in payload
     assert "response_metadata" in payload

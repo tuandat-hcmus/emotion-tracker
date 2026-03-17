@@ -22,6 +22,12 @@ class EmotionAnalysisResponse(BaseModel):
     confidence: float | None
     dominant_signals: list[str]
     response_mode: str | None
+    language: str | None = None
+    primary_emotion: str | None = None
+    secondary_emotions: list[str] = Field(default_factory=list)
+    source: str | None = None
+    raw_model_labels: list[str] = Field(default_factory=list)
+    provider_name: str | None = None
 
 
 class ResponsePlanResponse(BaseModel):
@@ -113,6 +119,12 @@ class CheckinDetailResponse(BaseModel):
     confidence: float | None = None
     dominant_signals: list[str] = Field(default_factory=list)
     response_mode: str | None = None
+    language: str | None = None
+    primary_emotion: str | None = None
+    secondary_emotions: list[str] = Field(default_factory=list)
+    source: str | None = None
+    raw_model_labels: list[str] = Field(default_factory=list)
+    provider_name: str | None = None
     empathetic_response: str | None = None
     gentle_suggestion: str | None = None
     quote_text: str | None = None

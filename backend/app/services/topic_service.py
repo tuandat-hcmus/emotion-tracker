@@ -2,15 +2,15 @@ def tag_topics(transcript: str) -> list[str]:
     normalized = transcript.casefold()
 
     topic_rules: list[tuple[str, tuple[str, ...]]] = [
-        ("công việc/học tập", ("cong viec", "công việc", "deadline", "hoc", "học", "thi", "du an", "dự án")),
-        ("gia đình", ("gia dinh", "gia đình", "bo me", "bố mẹ", "cha me", "anh chi em")),
-        ("tình cảm", ("yeu", "yêu", "nguoi yeu", "người yêu", "chia tay", "tinh cam", "tình cảm")),
-        ("bạn bè", ("ban be", "bạn bè", "ban than", "bạn thân", "dong nghiep", "đồng nghiệp")),
-        ("cô đơn", ("co don", "cô đơn", "lac long", "lạc lõng", "khong ai", "không ai")),
-        ("sức khỏe", ("met", "mệt", "om", "ốm", "ngu", "ngủ", "suc khoe", "sức khỏe", "dau", "đau")),
-        ("tự nghi ngờ", ("tu nghi ngo", "tự nghi ngờ", "khong du gioi", "không đủ giỏi", "tu ti", "tự ti")),
-        ("biết ơn/thành tựu", ("biet on", "biết ơn", "thanh tuu", "thành tựu", "tu hao", "tự hào")),
-        ("đời sống hằng ngày", ("hom nay", "hôm nay", "hang ngay", "hằng ngày", "sinh hoat", "sinh hoạt")),
+        ("work/school", ("cong viec", "công việc", "deadline", "hoc", "học", "thi", "du an", "dự án", "work", "school", "class", "exam", "project", "job")),
+        ("family", ("gia dinh", "gia đình", "bo me", "bố mẹ", "cha me", "anh chi em", "family", "mom", "dad", "parents", "sister", "brother")),
+        ("relationships", ("yeu", "yêu", "nguoi yeu", "người yêu", "chia tay", "tinh cam", "tình cảm", "boyfriend", "girlfriend", "partner", "relationship", "breakup")),
+        ("friends", ("ban be", "bạn bè", "ban than", "bạn thân", "dong nghiep", "đồng nghiệp", "friend", "friends", "coworker", "colleague")),
+        ("loneliness", ("co don", "cô đơn", "lac long", "lạc lõng", "khong ai", "không ai", "alone", "lonely", "left out", "isolated")),
+        ("health", ("met", "mệt", "om", "ốm", "ngu", "ngủ", "suc khoe", "sức khỏe", "dau", "đau", "health", "sick", "tired", "sleep", "ill")),
+        ("self-doubt", ("tu nghi ngo", "tự nghi ngờ", "khong du gioi", "không đủ giỏi", "tu ti", "tự ti", "not good enough", "self doubt", "insecure", "imposter")),
+        ("gratitude/achievement", ("biet on", "biết ơn", "thanh tuu", "thành tựu", "tu hao", "tự hào", "grateful", "gratitude", "proud", "achievement")),
+        ("daily life", ("hom nay", "hôm nay", "hang ngay", "hằng ngày", "sinh hoat", "sinh hoạt", "today", "daily", "routine", "lately")),
     ]
 
     matches: list[str] = []
@@ -19,6 +19,6 @@ def tag_topics(transcript: str) -> list[str]:
             matches.append(topic)
 
     if not matches:
-        return ["đời sống hằng ngày"]
+        return ["daily life"]
 
     return matches[:3]

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emotion Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Emotion Tracker MVP</p>
+        <h1>Supportive journaling, wrapped in a usable frontend.</h1>
+        <p class="hero-text">
+          This shell speaks directly to the FastAPI backend: authenticate, inspect your home dashboard,
+          preview supportive responses, and pull wrap-up snapshots without adding a frontend toolchain first.
+        </p>
+      </div>
+      <div class="hero-panel">
+        <label class="field">
+          <span>Backend URL</span>
+          <input id="backend-url" type="url" placeholder="http://127.0.0.1:8000" />
+        </label>
+        <div class="hero-actions">
+          <button id="save-backend" class="button button-secondary" type="button">Save URL</button>
+          <button id="refresh-all" class="button" type="button">Refresh Dashboard</button>
+        </div>
+        <p id="session-status" class="session-status">No active session.</p>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel auth-panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Session</p>
+          <h2>Register or log in</h2>
+        </div>
+        <div class="auth-switch">
+          <button id="show-login" class="chip chip-active" type="button">Login</button>
+          <button id="show-register" class="chip" type="button">Register</button>
+        </div>
+
+        <form id="login-form" class="stack">
+          <label class="field">
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="button" type="submit">Log In</button>
+        </form>
+
+        <form id="register-form" class="stack hidden">
+          <label class="field">
+            <span>Display name</span>
+            <input name="display_name" type="text" autocomplete="name" />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input name="password" type="password" autocomplete="new-password" required />
+          </label>
+          <button class="button" type="submit">Create Account</button>
+        </form>
+
+        <div class="logout-row">
+          <button id="logout" class="button button-ghost" type="button">Clear Session</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Overview</p>
+          <h2>Home snapshot</h2>
+        </div>
+        <div id="home-cards" class="card-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Preview</p>
+          <h2>Response lab</h2>
+        </div>
+        <form id="preview-form" class="stack">
+          <label class="field">
+            <span>Transcript</span>
+            <textarea name="transcript" rows="6" placeholder="Write a sample check-in to preview the support package." required></textarea>
+          </label>
+          <div class="inline-fields">
+            <label class="field">
+              <span>Override risk</span>
+              <select name="override_risk_level">
+                <option value="">Auto</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Override topics</span>
+              <input name="override_topic_tags" type="text" placeholder="work, family, rest" />
+            </label>
+          </div>
+          <button class="button" type="submit">Generate Preview</button>
+        </form>
+        <div id="preview-output" class="response-output empty-state">Preview output will appear here after login.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">History</p>
+          <h2>Calendar</h2>
+        </div>
+        <div class="toolbar">
+          <button class="chip chip-active" data-days="14" type="button">14 days</button>
+          <button class="chip" data-days="30" type="button">30 days</button>
+          <button class="chip" data-days="60" type="button">60 days</button>
+        </div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Reflection</p>
+          <h2>Latest wrap-up</h2>
+        </div>
+        <div class="toolbar">
+          <button id="weekly-wrapup" class="chip chip-active" type="button">Weekly</button>
+          <button id="monthly-wrapup" class="chip" type="button">Monthly</button>
+        </div>
+        <div id="wrapup-output" class="wrapup-output empty-state">No wrap-up loaded yet.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <p class="eyebrow">Safety</p>
+          <h2>Crisis resources</h2>
+        </div>
+        <form id="crisis-form" class="inline-fields">
+          <label class="field">
+            <span>Country code</span>
+            <input name="country" type="text" value="US" maxlength="3" />
+          </label>
+          <button class="button button-secondary" type="submit">Load Resources</button>
+        </form>
+        <div id="crisis-output" class="response-output empty-state">US resources load by default.</div>
+      </section>
+    </main>
+  </div>
+
+  <template id="card-template">
+    <article class="stat-card">
+      <p class="card-label"></p>
+      <strong class="card-value"></strong>
+      <p class="card-meta"></p>
+    </article>
+  </template>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

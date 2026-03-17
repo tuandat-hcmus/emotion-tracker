@@ -48,10 +48,57 @@ class MockResponseGeneratorProvider:
     ) -> dict[str, object]:
         del transcript
         primary_topic = topic_tags[0] if topic_tags else "đời sống hằng ngày"
+        language = str(emotion_analysis.get("language", "en"))
         response_mode = str(emotion_analysis["response_mode"])
         stress_score = float(emotion_analysis["stress_score"])
         acknowledgment_focus = str(response_plan.get("acknowledgment_focus", "mixed_state"))
         opening_style = str(response_plan.get("opening_style", "reflective"))
+
+        if language == "en":
+            primary_topic = topic_tags[0] if topic_tags else "daily life"
+            if response_mode == "celebratory_warm":
+                empathetic_response = (
+                    f"I can hear a warmer note in what you shared about {primary_topic}. "
+                    "Whatever softened here seems real, and it deserves to be noticed."
+                )
+            elif response_mode == "low_energy_comfort":
+                empathetic_response = (
+                    f"It sounds like your energy is running low around {primary_topic}. "
+                    "I want to acknowledge that tiredness without pushing you to feel different right away."
+                )
+            elif response_mode == "grounding_soft":
+                empathetic_response = (
+                    f"It sounds like the pressure around {primary_topic} is landing hard right now. "
+                    "You do not need to force yourself to be okay immediately."
+                )
+            elif response_mode == "validating_gentle":
+                empathetic_response = (
+                    f"There is a lot of strain in what you shared about {primary_topic}. "
+                    "That reaction makes sense and does not need to be dismissed."
+                )
+            else:
+                empathetic_response = (
+                    f"There are a few emotional layers moving together in what you shared about {primary_topic}. "
+                    "Nothing about that needs to be simplified too quickly."
+                )
+
+            gentle_suggestion = None
+            if bool(response_plan["suggestion_allowed"]):
+                suggestion_style = str(response_plan["suggestion_style"])
+                if suggestion_style == "small_grounding":
+                    gentle_suggestion = "If it helps, take one slower exhale before deciding what comes next."
+                elif suggestion_style == "small_reflective" and stress_score < 0.6:
+                    gentle_suggestion = "If you want, name the heaviest part first and leave the rest for later."
+                elif suggestion_style == "gentle_connection":
+                    gentle_suggestion = "If it feels safe, sending one honest line to someone you trust is enough."
+                elif suggestion_style == "restful_permission":
+                    gentle_suggestion = "If you can, give yourself one very small pause without asking more from yourself."
+                elif suggestion_style == "savoring":
+                    gentle_suggestion = "If you want, stay with the steadier part of this moment a little longer."
+            return {
+                "empathetic_response": empathetic_response,
+                "gentle_suggestion": gentle_suggestion,
+            }
 
         if response_mode == "celebratory_warm":
             if _has_signal(emotion_analysis, "pride_growth"):
@@ -227,26 +274,203 @@ class OpenAIResponseGeneratorProvider:
         }
 
 
-def get_response_generator_provider() -> ResponseGeneratorProvider:
-    settings = get_settings()
+class GeminiResponseGeneratorProvider:
+    def __init__(self) -> None:
+        settings = get_settings()
+        if not settings.gemini_api_key:
+            raise ProviderConfigurationError("Response provider 'gemini' requires GEMINI_API_KEY")
 
-    if settings.response_provider == "openai":
+        try:
+            from google import genai
+        except ImportError as exc:
+            raise ProviderConfigurationError(
+                "Response provider 'gemini' requires the 'google-genai' package to be installed"
+            ) from exc
+
+        self._client = genai.Client(api_key=settings.gemini_api_key)
+        self._model = settings.gemini_text_model
+
+    def generate(
+        self,
+        *,
+        transcript: str,
+        emotion_analysis: dict[str, object],
+        topic_tags: list[str],
+        response_plan: dict[str, object],
+    ) -> dict[str, object]:
+        topic_text = ", ".join(topic_tags) if topic_tags else "đời sống hằng ngày"
+        render_language = str(emotion_analysis.get("language") or get_settings().ai_render_language or "en")
+        if render_language == "vi":
+            prompt = (
+                "Bạn đang viết lời phản hồi hỗ trợ ngắn gọn cho một ứng dụng wellness, không phải chẩn đoán hay trị liệu. "
+                "Trả về JSON duy nhất với 2 key: empathetic_response và gentle_suggestion. "
+                "Viết bằng tiếng Việt tự nhiên, ấm, ngắn, không lên giọng chuyên gia, không dùng câu sáo rỗng kiểu 'hãy cố lên'. "
+                "empathetic_response dài 2 đến 4 câu ngắn. gentle_suggestion là null hoặc 1 câu ngắn. "
+                "Không bịa thêm cảm xúc ngoài emotion_analysis. Nếu confidence thấp hoặc trạng thái lẫn lộn, hãy viết thận trọng và ít khẳng định hơn. "
+                "Không đưa lời khuyên dài, không chẩn đoán, không nói như therapist. "
+                f"Emotion analysis: {json.dumps(emotion_analysis, ensure_ascii=False)}. "
+                f"Response plan: {json.dumps(response_plan, ensure_ascii=False)}. "
+                f"Topics: {topic_text}. Transcript: {transcript}"
+            )
+        else:
+            few_shots = [
+                {
+                    "input": "My girlfriend is sick",
+                    "output": {
+                        "empathetic_response": "It makes sense that your mind is going to her right away. When someone you care about is sick, even a short update can leave a lot of concern sitting in the background.",
+                        "gentle_suggestion": "If it helps, one small check-in or one practical act of care may feel steadier than looping alone.",
+                        "safety_note": None,
+                        "style": "supportive_reflective",
+                        "specificity": "medium",
+                        "reasoning_note": "Relational concern and health update; acknowledge concern for the other person first.",
+                    },
+                },
+                {
+                    "input": "My partner has been sick today and I keep worrying about them.",
+                    "output": {
+                        "empathetic_response": "It sounds like a lot of your attention is wrapped around someone you love right now. That kind of worry can stay in the background all day, even when you are trying to function normally.",
+                        "gentle_suggestion": "If it helps, anchor yourself to one concrete thing you can do for them or with them today.",
+                        "safety_note": None,
+                        "style": "supportive_reflective",
+                        "specificity": "high",
+                        "reasoning_note": "Concern-focused response with a relational target.",
+                    },
+                },
+                {
+                    "input": "A friend told me I'd be good at this kind of work.",
+                    "output": {
+                        "empathetic_response": "That kind of recognition can land more deeply than people expect. It makes sense if part of you is still taking in what it means.",
+                        "gentle_suggestion": "If you want, hold onto the exact words that felt most believable.",
+                        "safety_note": None,
+                        "style": "celebratory_warm",
+                        "specificity": "medium",
+                        "reasoning_note": "Recognition/appreciation; warm but not overblown.",
+                    },
+                },
+                {
+                    "input": "I've had deadlines piling up for days.",
+                    "output": {
+                        "empathetic_response": "That sounds like the kind of pressure that keeps stacking even when you are trying to stay functional. You do not need to minimize it for it to count as a lot.",
+                        "gentle_suggestion": "If it helps, choose the next smallest thing rather than the whole pile.",
+                        "safety_note": None,
+                        "style": "grounding_soft",
+                        "specificity": "medium",
+                        "reasoning_note": "Deadline pressure; grounding rather than generic comfort.",
+                    },
+                },
+                {
+                    "input": "I feel weirdly empty today.",
+                    "output": {
+                        "empathetic_response": "That kind of emptiness can feel unsettling precisely because it is hard to pin down. I want to acknowledge it without forcing it into a cleaner story too quickly.",
+                        "gentle_suggestion": "If you want, describe one small detail of how that emptiness shows up in your body or your day.",
+                        "safety_note": None,
+                        "style": "low_energy_comfort",
+                        "specificity": "medium",
+                        "reasoning_note": "Low-energy internal state; quiet acknowledgment fits better than advice.",
+                    },
+                },
+            ]
+            prompt = (
+                "You are writing a short supportive response for a wellness app, not diagnosis or therapy. "
+                "Return JSON only with keys: empathetic_response, gentle_suggestion, safety_note, style, specificity, reasoning_note. "
+                "Write natural, warm English. Keep empathetic_response to 2 to 4 short sentences. "
+                "gentle_suggestion must be null or one short sentence. safety_note should usually be null in low-risk cases. "
+                "Do not invent emotions beyond emotion_analysis. If confidence is low or the state is mixed, stay cautious and avoid overclaiming. "
+                "Do not sound clinical, do not write long advice, and do not use generic phrases like 'stay strong'. "
+                "Acknowledge concern for another person before shifting to the user's inner state when the render payload suggests a relationship or health update. "
+                f"Few-shot examples: {json.dumps(few_shots, ensure_ascii=False)}. "
+                f"Emotion analysis: {json.dumps(emotion_analysis, ensure_ascii=False)}. "
+                f"Response plan: {json.dumps(response_plan, ensure_ascii=False)}. "
+                f"Topics: {topic_text}. Transcript: {transcript}"
+            )
+
+        generation_config = {
+            "response_mime_type": "application/json",
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+
+        try:
+            result = self._client.models.generate_content(
+                model=self._model,
+                contents=prompt,
+                config=generation_config,
+            )
+        except Exception as exc:
+            raise ProviderExecutionError(f"Gemini response generation failed: {exc}") from exc
+
+        output_text = getattr(result, "text", None)
+        if not output_text:
+            raise ProviderExecutionError("Gemini response generation returned empty text")
+        try:
+            payload = json.loads(output_text)
+        except json.JSONDecodeError as exc:
+            raise ProviderExecutionError("Gemini response generation returned invalid JSON") from exc
+
+        empathetic_response = str(payload.get("empathetic_response", "")).strip()
+        if not empathetic_response:
+            raise ProviderExecutionError("Gemini response generation returned empty empathetic_response")
+        suggestion = payload.get("gentle_suggestion")
+        normalized_suggestion = str(suggestion).strip() if isinstance(suggestion, str) and suggestion.strip() else None
+        safety_note_value = payload.get("safety_note")
+        normalized_safety_note = (
+            str(safety_note_value).strip()
+            if isinstance(safety_note_value, str) and safety_note_value.strip()
+            else None
+        )
+        if render_language != "vi":
+            style = str(payload.get("style", "")).strip()
+            specificity = str(payload.get("specificity", "")).strip()
+            reasoning_note = str(payload.get("reasoning_note", "")).strip()
+            if style not in {
+                "supportive_reflective",
+                "grounding_soft",
+                "celebratory_warm",
+                "low_energy_comfort",
+                "safe_support",
+                "validating_gentle",
+            }:
+                raise ProviderExecutionError("Gemini response generation returned invalid style")
+            if specificity not in {"low", "medium", "high"}:
+                raise ProviderExecutionError("Gemini response generation returned invalid specificity")
+            if not reasoning_note:
+                raise ProviderExecutionError("Gemini response generation returned empty reasoning_note")
+        return {
+            "empathetic_response": empathetic_response,
+            "gentle_suggestion": normalized_suggestion,
+            "safety_note": normalized_safety_note,
+            "style": payload.get("style"),
+            "specificity": payload.get("specificity"),
+            "reasoning_note": payload.get("reasoning_note"),
+        }
+
+
+def get_response_generator_provider(provider_name: str | None = None) -> ResponseGeneratorProvider:
+    settings = get_settings()
+    selected_provider = provider_name or settings.response_provider
+
+    if selected_provider == "openai":
         return OpenAIResponseGeneratorProvider()
-    if settings.use_mock_response or settings.response_provider == "mock":
+    if selected_provider == "gemini":
+        return GeminiResponseGeneratorProvider()
+    if settings.use_mock_response or selected_provider == "mock":
         return MockResponseGeneratorProvider()
-    raise ProviderConfigurationError(f"Unsupported response provider: {settings.response_provider}")
+    raise ProviderConfigurationError(f"Unsupported response provider: {selected_provider}")
 
 
-def get_response_provider_name() -> str:
+def get_response_provider_name(provider_name: str | None = None) -> str:
     settings = get_settings()
-    if settings.response_provider == "openai":
+    selected_provider = provider_name or settings.response_provider
+    if selected_provider == "openai":
         return "openai"
-    if settings.use_mock_response or settings.response_provider == "mock":
+    if selected_provider == "gemini":
+        return "gemini"
+    if settings.use_mock_response or selected_provider == "mock":
         return "mock"
-    return settings.response_provider
+    return selected_provider
 
 
-def generate_supportive_response(
+def render_supportive_response(
     *,
     transcript: str,
     emotion_analysis: dict[str, object],
@@ -255,13 +479,14 @@ def generate_supportive_response(
     response_plan: dict[str, object],
     user_id: str,
     quote_opt_in: bool = True,
+    provider_override: str | None = None,
 ) -> dict[str, object]:
     quote = None
     if risk_level in {"high", "medium"}:
         empathetic_response = generate_safe_support_message(risk_level)
         gentle_suggestion = None
     else:
-        provider = get_response_generator_provider()
+        provider = get_response_generator_provider(provider_override)
         provider_payload = provider.generate(
             transcript=transcript,
             emotion_analysis=emotion_analysis,
@@ -283,6 +508,34 @@ def generate_supportive_response(
         "gentle_suggestion": gentle_suggestion,
         "quote": quote,
         "ai_response": _compose_legacy_response(empathetic_response, gentle_suggestion, quote),
+        "provider_name": get_response_provider_name(provider_override),
+    }
+
+
+def generate_supportive_response(
+    *,
+    transcript: str,
+    emotion_analysis: dict[str, object],
+    topic_tags: list[str],
+    risk_level: str,
+    response_plan: dict[str, object],
+    user_id: str,
+    quote_opt_in: bool = True,
+) -> dict[str, object]:
+    payload = render_supportive_response(
+        transcript=transcript,
+        emotion_analysis=emotion_analysis,
+        topic_tags=topic_tags,
+        risk_level=risk_level,
+        response_plan=response_plan,
+        user_id=user_id,
+        quote_opt_in=quote_opt_in,
+    )
+    return {
+        "empathetic_response": str(payload["empathetic_response"]),
+        "gentle_suggestion": payload["gentle_suggestion"],
+        "quote": payload["quote"],
+        "ai_response": str(payload["ai_response"]),
     }
 
 

@@ -24,6 +24,8 @@ def get_entry_or_404(db: Session, entry_id: str) -> JournalEntry:
 
 
 def serialize_entry(entry: JournalEntry) -> dict[str, object]:
+    response_metadata = json.loads(entry.response_metadata_text) if entry.response_metadata_text else None
+    emotion_metadata = response_metadata.get("emotion_analysis", {}) if isinstance(response_metadata, dict) else {}
     return {
         "entry_id": entry.id,
         "status": entry.processing_status,
@@ -41,10 +43,16 @@ def serialize_entry(entry: JournalEntry) -> dict[str, object]:
         "confidence": entry.emotion_confidence,
         "dominant_signals": json.loads(entry.dominant_signals_text) if entry.dominant_signals_text else [],
         "response_mode": entry.response_mode,
+        "language": emotion_metadata.get("language"),
+        "primary_emotion": emotion_metadata.get("primary_emotion"),
+        "secondary_emotions": list(emotion_metadata.get("secondary_emotions", [])),
+        "source": emotion_metadata.get("source"),
+        "raw_model_labels": list(emotion_metadata.get("raw_model_labels", [])),
+        "provider_name": emotion_metadata.get("provider_name"),
         "empathetic_response": entry.empathetic_response,
         "gentle_suggestion": entry.gentle_suggestion,
         "quote_text": entry.quote_text,
-        "response_metadata": json.loads(entry.response_metadata_text) if entry.response_metadata_text else None,
+        "response_metadata": response_metadata,
         "topic_tags": json.loads(entry.topic_tags_text) if entry.topic_tags_text else [],
         "risk_level": entry.risk_level,
         "risk_flags": json.loads(entry.risk_flags_text) if entry.risk_flags_text else [],
@@ -94,6 +102,7 @@ def _apply_processing_results(
     support_package = build_support_package(
         transcript=transcript_text,
         user_id=entry.user_id,
+        audio_path=entry.audio_path,
         quote_opt_in=preferences.quote_opt_in,
     )
     emotion_result = support_package["emotion_analysis"]
@@ -124,10 +133,17 @@ def _apply_processing_results(
     entry.response_metadata_text = json.dumps(
         {
             "emotion_analysis": {
+                "language": emotion_result["language"],
+                "primary_emotion": emotion_result["primary_emotion"],
+                "secondary_emotions": emotion_result["secondary_emotions"],
                 "social_need_score": emotion_result["social_need_score"],
                 "confidence": emotion_result["confidence"],
                 "dominant_signals": emotion_result["dominant_signals"],
                 "response_mode": emotion_result["response_mode"],
+                "source": emotion_result["source"],
+                "raw_model_labels": emotion_result["raw_model_labels"],
+                "provider_name": emotion_result["provider_name"],
+                "source_metadata": emotion_result["source_metadata"],
             },
             "response_plan": support_package["response_plan"],
             "quote": quote.model_dump() if quote is not None else None,

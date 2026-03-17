@@ -9,6 +9,7 @@ def build_support_package(
     *,
     transcript: str,
     user_id: str,
+    audio_path: str | None = None,
     quote_opt_in: bool = True,
     override_risk_level: str | None = None,
     override_topic_tags: list[str] | None = None,
@@ -17,7 +18,7 @@ def build_support_package(
     safety_result = detect_safety_risk(transcript)
     risk_level = override_risk_level or str(safety_result["risk_level"])
     topic_tags = override_topic_tags or tag_topics(transcript)
-    emotion_analysis = analyze_emotion(transcript, risk_level=risk_level)
+    emotion_analysis = analyze_emotion(transcript, risk_level=risk_level, audio_path=audio_path)
     response_plan = build_response_plan(
         transcript=transcript,
         emotion_analysis=emotion_analysis,
