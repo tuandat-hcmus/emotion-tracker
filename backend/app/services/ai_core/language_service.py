@@ -42,6 +42,7 @@ _VI_MARKERS = (
     "ữ",
     "ự",
 )
+_SUPPORTED_LANGUAGE_CODES = {"en", "vi", "zh"}
 
 
 @lru_cache(maxsize=1)
@@ -53,10 +54,21 @@ def _get_langdetect_detector():
     return detect
 
 
+def normalize_language_code(language: str | None) -> str:
+    normalized = (language or "").strip().casefold()
+    if normalized.startswith("zh"):
+        return "zh"
+    if normalized == "vi":
+        return "vi"
+    if normalized == "en":
+        return "en"
+    return "en"
+
+
 def detect_language(text: str) -> str:
     normalized = text.strip().casefold()
     if not normalized:
-        return "unknown"
+        return "en"
     if _CJK_RE.search(normalized):
         return "zh"
     if any(marker in normalized for marker in _VI_MARKERS):
@@ -67,11 +79,8 @@ def detect_language(text: str) -> str:
         try:
             detected = detector(normalized)
         except Exception:
-            detected = "unknown"
-        if detected.startswith("zh"):
-            return "zh"
-        if detected == "vi":
-            return "vi"
-        if detected and detected != "unknown":
-            return detected
+            detected = "en"
+        normalized_detected = normalize_language_code(detected)
+        if normalized_detected in _SUPPORTED_LANGUAGE_CODES:
+            return normalized_detected
     return "en"

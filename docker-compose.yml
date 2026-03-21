@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16
+    container_name: emotion-postgres
+    environment:
+      POSTGRES_DB: emotion_app
+      POSTGRES_USER: emotion_user
+      POSTGRES_PASSWORD: "123456"
+    ports:
+      - "5433:5432"
+    volumes:
+      - emotion-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emotion_user -d emotion_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: emotion-backend
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql+psycopg://emotion_user:123456@db:5432/emotion_app
+      DB_ECHO: "false"
+      AUTO_CREATE_TABLES_FOR_DEV: "false"
+      EMOTION_MODEL_ENABLED: "true"
+      EMOTION_MODEL_DIR: /app/models/artifacts/emotion_xlmr
+      EMOTION_MODEL_DEVICE: cpu
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  emotion-postgres-data:

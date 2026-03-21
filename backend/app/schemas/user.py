@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class TreeStateResponse(BaseModel):
@@ -36,20 +36,26 @@ class UserSummaryResponse(BaseModel):
     top_topics: list[str]
     risk_counts: dict[str, int]
     latest_entry_at: str | None
+    dominant_emotional_patterns: list[str] = Field(default_factory=list)
+    recurring_triggers: list[str] = Field(default_factory=list)
+    workload_deadline_patterns: list[str] = Field(default_factory=list)
+    positive_anchors: list[str] = Field(default_factory=list)
+    emotional_direction_trend: str = "mixed"
+    high_stress_frequency: float = 0.0
+    summary_text: str | None = None
 
 
 class JournalHistoryItemResponse(BaseModel):
+    id: str
     entry_id: str
     status: str
     session_type: str
-    transcript_text: str | None
-    ai_response: str | None
-    emotion_label: str | None
-    valence_score: float | None
-    energy_score: float | None
+    source_type: str
+    transcript_excerpt: str | None
+    ai_response_excerpt: str | None
+    primary_label: str | None
+    secondary_labels: list[str]
     stress_score: float | None
-    risk_level: str | None
-    topic_tags: list[str]
     created_at: datetime
     updated_at: datetime
 

@@ -1,5 +1,7 @@
 transformers>=4.46.0
 torch>=2.4.0
+safetensors>=0.4.5
+sentencepiece>=0.2.0
 huggingface_hub>=0.26.0
 langdetect>=1.0.9
 scikit-learn>=1.5.0

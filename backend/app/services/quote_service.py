@@ -63,7 +63,18 @@ _QUOTE_CATALOG: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-_POSITIVE_EMOTIONS = {"happy", "joy", "grateful", "calm", "hopeful", "content", "relieved", "tươi sáng"}
+_POSITIVE_EMOTIONS = {
+    "happy",
+    "joy",
+    "grateful",
+    "calm",
+    "hopeful",
+    "content",
+    "relieved",
+    "tươi sáng",
+    "biết ơn",
+    "tự hào",
+}
 _LOW_MOOD_EMOTIONS = {"sad", "down", "lonely", "tired", "ashamed", "hurt", "chùng xuống", "nặng nề"}
 _STRESS_EMOTIONS = {"anxious", "stressed", "overwhelmed", "angry", "frustrated", "afraid", "căng", "phức hợp"}
 

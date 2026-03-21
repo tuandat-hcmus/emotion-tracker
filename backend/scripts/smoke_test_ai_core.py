@@ -14,7 +14,6 @@ from app.db.base import Base
 from app.core.config import get_settings
 from app.models.journal_entry import JournalEntry
 from app.models.user_preference import UserPreference
-from app.services.ai_core.model_registry import selected_audio_model, selected_multilingual_model, selected_public_model
 from app.services.checkin_processing_service import process_entry, serialize_entry
 from app.services.emotion_service import analyze_emotion
 
@@ -58,20 +57,10 @@ def run_smoke_test() -> dict[str, object]:
         mapped = serialize_entry(processed)
         return {
             "selected_config": {
-                "enable_canonical_models": settings.enable_canonical_models,
-                "enable_public_text_models": settings.enable_public_text_models,
-                "enable_audio_emotion": settings.enable_audio_emotion,
-                "enable_heuristic_fallback": settings.enable_heuristic_fallback,
-                "ai_confidence_threshold": settings.ai_confidence_threshold,
-                "ai_low_confidence_hybrid": settings.ai_low_confidence_hybrid,
-                "vi_public_model": selected_public_model("vi").model_name if selected_public_model("vi") else None,
-                "zh_public_model": selected_public_model("zh").model_name if selected_public_model("zh") else None,
-                "multilingual_model": selected_multilingual_model().model_name if selected_multilingual_model() else None,
-                "audio_model": selected_audio_model().model_name if selected_audio_model() else None,
-                "vi_canonical_dir": settings.vi_canonical_model_dir,
-                "zh_canonical_dir": settings.zh_canonical_model_dir,
-                "vi_canonical_backbone": settings.vi_canonical_backbone,
-                "zh_canonical_backbone": settings.zh_canonical_backbone,
+                "emotion_model_enabled": settings.emotion_model_enabled,
+                "emotion_model_dir": settings.emotion_model_dir,
+                "emotion_model_threshold": settings.emotion_model_threshold,
+                "emotion_model_device": settings.emotion_model_device,
             },
             "normalized_outputs": normalized,
             "processed_checkin": mapped,

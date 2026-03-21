@@ -161,6 +161,23 @@ class WrapupConsistencyResponse(BaseModel):
     ratio: float
 
 
+class WrapupInsightCardResponse(BaseModel):
+    kind: str
+    title: str
+    summary: str
+    emphasis: str | None = None
+    items: list[str] = Field(default_factory=list)
+
+
+class WrapupTrendBlockResponse(BaseModel):
+    emotional_direction_trend: str
+    high_stress_frequency: float
+    high_stress_entry_count: int
+    workload_pattern_detected: bool
+    positive_anchor_count: int
+    recurring_trigger_count: int
+
+
 class WrapupPayloadResponse(BaseModel):
     period_type: str
     period_start: str
@@ -176,6 +193,15 @@ class WrapupPayloadResponse(BaseModel):
     streak_highlight: WrapupStreakHighlightResponse
     checkin_consistency: WrapupConsistencyResponse
     notable_shift: str
+    dominant_emotional_patterns: list[str] = Field(default_factory=list)
+    recurring_triggers: list[str] = Field(default_factory=list)
+    workload_deadline_patterns: list[str] = Field(default_factory=list)
+    positive_anchors: list[str] = Field(default_factory=list)
+    emotional_direction_trend: str = "mixed"
+    high_stress_frequency: float = 0.0
+    summary_text: str | None = None
+    insight_cards: list[WrapupInsightCardResponse] = Field(default_factory=list)
+    trend_block: WrapupTrendBlockResponse | None = None
     closing_message: str
 
 

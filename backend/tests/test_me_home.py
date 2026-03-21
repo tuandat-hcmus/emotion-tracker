@@ -179,6 +179,11 @@ def test_weekly_latest_returns_snapshot(strict_client) -> None:
     payload = response.json()
     assert payload["period_type"] == "week"
     assert payload["payload"]["period_type"] == "week"
+    assert "dominant_emotional_patterns" in payload["payload"]
+    assert "recurring_triggers" in payload["payload"]
+    assert "positive_anchors" in payload["payload"]
+    assert "trend_block" in payload["payload"]
+    assert "insight_cards" in payload["payload"]
 
 
 def test_monthly_latest_returns_snapshot(strict_client) -> None:
@@ -192,6 +197,52 @@ def test_monthly_latest_returns_snapshot(strict_client) -> None:
     assert payload["payload"]["period_type"] == "month"
 
 
+def test_weekly_wrapup_detects_recurring_deadline_patterns_and_positive_anchors(strict_client) -> None:
+    headers = _register_and_login(strict_client, "weekly-patterns@example.com")
+    first_entry = _upload_entry(strict_client, headers)
+    second_entry = _upload_entry(strict_client, headers)
+    third_entry = _upload_entry(strict_client, headers)
+
+    _process_entry(strict_client, first_entry, headers, "I feel stressed because work deadlines keep piling up.")
+    _process_entry(strict_client, second_entry, headers, "I still feel overwhelmed and pressured by deadlines at work.")
+    _process_entry(strict_client, third_entry, headers, "I feel lighter and grateful because things are improving.")
+
+    response = strict_client.post(
+        "/v1/me/wrapups/regenerate",
+        headers=headers,
+        json={"period_type": "week"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["payload"]
+    assert payload["dominant_emotional_patterns"]
+    assert "deadline_pressure" in payload["recurring_triggers"]
+    assert "deadline_pressure" in payload["workload_deadline_patterns"]
+    assert payload["positive_anchors"]
+    assert payload["trend_block"]["workload_pattern_detected"] is True
+    assert payload["summary_text"]
+    assert payload["insight_cards"]
+
+
+def test_monthly_wrapup_handles_low_data_edge_case(strict_client) -> None:
+    headers = _register_and_login(strict_client, "monthly-low-data@example.com")
+    entry_id = _upload_entry(strict_client, headers)
+    _process_entry(strict_client, entry_id, headers, "I feel calmer today and a bit relieved.")
+
+    response = strict_client.post(
+        "/v1/me/wrapups/regenerate",
+        headers=headers,
+        json={"period_type": "month"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["payload"]
+    assert payload["total_entries"] == 1
+    assert payload["summary_text"]
+    assert isinstance(payload["insight_cards"], list)
+    assert payload["trend_block"]["high_stress_frequency"] >= 0.0
+
+
 def test_wrapup_generation_works_without_any_entries(strict_client) -> None:
     headers = _register_and_login(strict_client, "wrapup-empty@example.com")
 
@@ -201,4 +252,10 @@ def test_wrapup_generation_works_without_any_entries(strict_client) -> None:
     payload = response.json()["payload"]
     assert payload["total_entries"] == 0
     assert payload["total_checkin_days"] == 0
+    assert payload["dominant_emotional_patterns"] == []
+    assert payload["recurring_triggers"] == []
+    assert payload["workload_deadline_patterns"] == []
+    assert payload["positive_anchors"] == []
+    assert payload["high_stress_frequency"] == 0.0
+    assert payload["trend_block"]["workload_pattern_detected"] is False
     assert payload["closing_message"]

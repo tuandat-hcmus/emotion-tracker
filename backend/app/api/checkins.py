@@ -10,6 +10,7 @@ from app.models.processing_attempt import ProcessingAttempt
 from app.models.user import User
 from app.schemas.checkin import (
     CheckinDetailResponse,
+    CreateTextCheckinRequest,
     DeleteCheckinResponse,
     ProcessAcceptedResponse,
     ProcessCheckinRequest,
@@ -17,12 +18,14 @@ from app.schemas.checkin import (
     ProcessingAttemptListResponse,
     UploadCheckinResponse,
 )
+from app.services.checkin_entry_service import get_entry_or_404, serialize_entry
 from app.services.checkin_processing_service import (
-    get_entry_or_404,
+    PROCESSABLE_STATUSES,
+    REPROCESSABLE_STATUSES,
+    create_and_process_text_entry,
     process_entry,
     process_entry_in_background,
     remove_entry_audio,
-    serialize_entry,
 )
 from app.services.storage_service import save_upload_file, validate_upload_file
 from app.services.tree_service import recompute_tree_for_user
@@ -81,7 +84,38 @@ def upload_checkin(
     db.commit()
     db.refresh(entry)
 
-    return UploadCheckinResponse(entry_id=entry.id, status=entry.processing_status)
+    return UploadCheckinResponse(entry_id=entry.id, status=entry.processing_status, source_type="voice")
+
+
+@router.post("/text", response_model=CheckinDetailResponse, status_code=status.HTTP_201_CREATED)
+def create_text_checkin(
+    payload: CreateTextCheckinRequest,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> CheckinDetailResponse:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    entry_user_id = current_user.id if current_user is not None else payload.user_id
+
+    if current_user is None and not settings.auth_optional_for_dev:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization required")
+    if not entry_user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required for text check-ins")
+
+    try:
+        entry = create_and_process_text_entry(
+            db=db,
+            user_id=entry_user_id,
+            session_type=payload.session_type,
+            raw_text=payload.text,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        _raise_processing_http_error(exc)
+
+    return CheckinDetailResponse.model_validate(serialize_entry(entry))
 
 
 @router.post("/{entry_id}/process", response_model=CheckinDetailResponse)
@@ -95,6 +129,19 @@ def process_checkin(
     enforce_entry_owner_access(entry, current_user)
     if entry.processing_status == "processing":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Journal entry is already processing")
+    if entry.processing_status == "processed":
+        normalized_override = payload.override_transcript.strip() if payload.override_transcript else None
+        if not normalized_override or normalized_override == (entry.transcript_text or ""):
+            return CheckinDetailResponse.model_validate(serialize_entry(entry))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Journal entry is already processed; use reprocess to change the transcript or snapshots",
+        )
+    if entry.processing_status not in PROCESSABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Journal entry cannot be processed from status '{entry.processing_status}'",
+        )
     try:
         processed_entry = process_entry(
             db=db,
@@ -124,6 +171,11 @@ def process_checkin_async(
             status_code=status.HTTP_409_CONFLICT,
             detail="Journal entry is already processed; use reprocess instead",
         )
+    if entry.processing_status not in PROCESSABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Journal entry cannot be processed from status '{entry.processing_status}'",
+        )
 
     entry.processing_status = "processing"
     entry.updated_at = datetime.now(timezone.utc)
@@ -152,7 +204,7 @@ def reprocess_checkin(
     enforce_entry_owner_access(entry, current_user)
     if entry.processing_status == "processing":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Journal entry is already processing")
-    if entry.processing_status not in {"processed", "failed"}:
+    if entry.processing_status not in REPROCESSABLE_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only processed or failed entries can be reprocessed",

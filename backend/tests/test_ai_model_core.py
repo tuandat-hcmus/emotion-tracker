@@ -1,5 +1,5 @@
 from app.services.ai_core.fusion_service import infer_emotion_signals
-from app.services.ai_core.schemas import AudioEmotionResult, TextEmotionResult
+from app.services.ai_core.schemas import TextEmotionResult
 
 
 def test_vietnamese_text_classification_path(monkeypatch) -> None:
@@ -74,7 +74,7 @@ def test_fallback_language_path(monkeypatch) -> None:
     assert result.ranked_emotions[0][0] == "sadness"
 
 
-def test_fusion_behavior_when_audio_provider_unavailable(monkeypatch) -> None:
+def test_fusion_behavior_uses_text_result_only(monkeypatch) -> None:
     import app.services.ai_core.fusion_service as fusion_module
 
     monkeypatch.setattr(
@@ -89,7 +89,6 @@ def test_fusion_behavior_when_audio_provider_unavailable(monkeypatch) -> None:
             source_metadata={"mode": "test"},
         ),
     )
-    monkeypatch.setattr(fusion_module, "infer_audio_emotion", lambda _audio_path: None)
 
     result = infer_emotion_signals("Mình buồn và cô đơn.", audio_path="fake.wav")
 
@@ -99,7 +98,7 @@ def test_fusion_behavior_when_audio_provider_unavailable(monkeypatch) -> None:
     assert result.source_metadata["audio"] is None
 
 
-def test_fusion_behavior_with_audio_available(monkeypatch) -> None:
+def test_fusion_behavior_ignores_audio_path(monkeypatch) -> None:
     import app.services.ai_core.fusion_service as fusion_module
 
     monkeypatch.setattr(
@@ -114,20 +113,9 @@ def test_fusion_behavior_with_audio_available(monkeypatch) -> None:
             source_metadata={"mode": "test"},
         ),
     )
-    monkeypatch.setattr(
-        fusion_module,
-        "infer_audio_emotion",
-        lambda _audio_path: AudioEmotionResult(
-            provider_name="audio-test",
-            raw_model_labels=["sad"],
-            ranked_emotions=[("exhaustion", 0.55), ("sadness", 0.3)],
-            confidence=0.55,
-            source_metadata={"mode": "test"},
-        ),
-    )
 
     result = infer_emotion_signals("Mình buồn.", audio_path="fake.wav")
 
-    assert result.source == "fused"
-    assert result.provider_name == "visolex/phobert-emotion+audio-test"
-    assert result.primary_emotion in {"sadness", "exhaustion"}
+    assert result.source == "text"
+    assert result.provider_name == "visolex/phobert-emotion"
+    assert result.primary_emotion == "sadness"

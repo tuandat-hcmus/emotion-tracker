@@ -1,10 +1,20 @@
 from fastapi import HTTPException, status
 
 from app.core.config import get_settings
-from app.schemas.demo import DemoAICoreResponse, DemoEmotionResponse, DemoSupportResponse
+from app.schemas.demo import (
+    DemoAICoreDetailsResponse,
+    DemoAICoreResponse,
+    DemoEmotionResponse,
+    DemoInsightFeaturesResponse,
+    DemoMemorySummaryResponse,
+    DemoNormalizedStateResponse,
+    DemoSupportResponse,
+    DemoSupportStrategyResponse,
+)
 from app.services.ai_core.language_service import detect_language
-from app.services.emotion_service import analyze_emotion
-from app.services.empathy_service import build_response_plan
+from app.services.companion_core import build_companion_pipeline, build_emotional_memory_record, get_demo_memory_store
+from app.services.demo_support_service import build_demo_safety_context, ensure_demo_enabled, list_recent_demo_memory
+from app.services.emotion_service import analyze_emotion, normalize_emotion_analysis
 from app.services.provider_errors import ProviderConfigurationError, ProviderExecutionError
 from app.services.response_service import render_supportive_response
 from app.services.safety_service import detect_safety_risk, generate_safe_support_message
@@ -198,37 +208,46 @@ def build_vi_demo_payload(
     del user_name
 
     settings = get_settings()
-    if not settings.enable_ai_core_demo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI core demo is disabled")
+    ensure_demo_enabled(get_settings_fn=get_settings)
 
-    requested_language = settings.ai_core_demo_language or settings.demo_locale
+    requested_language = getattr(settings, "ai_core_demo_language", None) or getattr(settings, "demo_locale", "vi")
     detected_language = detect_language(text)
     if requested_language == "vi" and detected_language != "vi":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Current demo preset only supports Vietnamese text input.",
         )
-    if settings.ai_core_demo_disable_zh and detected_language == "zh":
+    if getattr(settings, "ai_core_demo_disable_zh", False) and detected_language == "zh":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Chinese is disabled in the current AI core demo preset.",
         )
 
-    safety_result = detect_safety_risk(text)
-    risk_level = str(safety_result["risk_level"])
-    topic_tags = tag_topics(text)
-    if context_tag and context_tag.strip() and context_tag.strip() not in topic_tags:
-        topic_tags = [context_tag.strip(), *topic_tags][:3]
-
-    emotion_analysis = analyze_emotion(text, risk_level=risk_level, audio_path=None)
-    emotion_analysis = _maybe_adjust_short_event_emotion(text, emotion_analysis, topic_tags)
-    response_plan = build_response_plan(
+    safety_result, risk_level, topic_tags = build_demo_safety_context(
+        text,
+        context_tag,
+        detect_safety_risk_fn=detect_safety_risk,
+        tag_topics_fn=tag_topics,
+    )
+    memory_store = get_demo_memory_store()
+    recent_memory = list_recent_demo_memory("vi-demo", days=7, get_demo_memory_store_fn=lambda: memory_store)
+    companion_pipeline = build_companion_pipeline(
         transcript=text,
-        emotion_analysis=emotion_analysis,
+        emotion_analysis=analyze_emotion(text, risk_level=risk_level, audio_path=None),
         topic_tags=topic_tags,
         risk_level=risk_level,
-        recent_trend=None,
+        context_tag=context_tag,
+        memory_records=recent_memory,
+        emotion_postprocessor=lambda analysis, _render_context: _maybe_adjust_short_event_emotion(text, analysis, topic_tags),
     )
+    emotion_analysis = companion_pipeline.emotion_analysis
+    if "primary_label" not in emotion_analysis:
+        emotion_analysis = normalize_emotion_analysis(emotion_analysis, risk_level)
+    normalized_state = companion_pipeline.normalized_state
+    memory_summary = companion_pipeline.memory_summary
+    insight_features = companion_pipeline.insight_features
+    support_strategy = companion_pipeline.support_strategy
+    response_plan = companion_pipeline.response_plan
     demo_provider = settings.ai_core_demo_response_provider.casefold().strip()
     empathetic_response: str
     gentle_suggestion: str | None
@@ -273,21 +292,28 @@ def build_vi_demo_payload(
         )
         support_provider_name = "template"
 
-    return DemoAICoreResponse(
+    payload = DemoAICoreResponse(
         input_text=text,
         language=str(emotion_analysis["language"]),
         topic_tags=topic_tags,
         risk_level=risk_level,
         risk_flags=[str(flag) for flag in safety_result["risk_flags"]],
         emotion=DemoEmotionResponse(
-            primary_emotion=str(emotion_analysis["primary_emotion"]),
-            secondary_emotions=[str(item) for item in emotion_analysis["secondary_emotions"]],
-            emotion_label=str(emotion_analysis["emotion_label"]),
+            primary_label=str(emotion_analysis["primary_label"]),
+            secondary_labels=[str(item) for item in emotion_analysis["secondary_labels"]],
+            all_labels=[str(item) for item in emotion_analysis["all_labels"]],
+            scores={str(label): float(score) for label, score in dict(emotion_analysis["scores"]).items()},
+            threshold=(
+                float(emotion_analysis["threshold"]) if emotion_analysis["threshold"] is not None else None
+            ),
             valence_score=float(emotion_analysis["valence_score"]),
             energy_score=float(emotion_analysis["energy_score"]),
             stress_score=float(emotion_analysis["stress_score"]),
             confidence=float(emotion_analysis["confidence"]),
             provider_name=str(emotion_analysis["provider_name"]),
+            source=str(emotion_analysis["source"]),
+            dominant_signals=[str(item) for item in emotion_analysis["dominant_signals"]],
+            context_tags=[str(item) for item in emotion_analysis.get("context_tags", [])],
             response_mode="safe_support" if risk_level in {"high", "medium"} else str(emotion_analysis["response_mode"]),
         ),
         support=DemoSupportResponse(
@@ -296,4 +322,69 @@ def build_vi_demo_payload(
             safety_note=safety_note,
             provider_name=support_provider_name,
         ),
+        ai_core=DemoAICoreDetailsResponse(
+            normalized_state=DemoNormalizedStateResponse(
+                primary_emotion=normalized_state.primary_emotion,
+                secondary_emotions=normalized_state.secondary_emotions,
+                valence=normalized_state.valence,
+                energy=normalized_state.energy,
+                stress=normalized_state.stress,
+                emotion_owner=normalized_state.emotion_owner,
+                social_context=normalized_state.social_context,
+                event_type=normalized_state.event_type,
+                concern_target=normalized_state.concern_target,
+                uncertainty=normalized_state.uncertainty,
+                confidence=normalized_state.confidence,
+                response_mode=normalized_state.response_mode,
+                risk_level=normalized_state.risk_level,
+            ),
+            support_strategy=DemoSupportStrategyResponse(
+                support_focus=support_strategy.support_focus,
+                strategy_type=support_strategy.strategy_type,
+                suggestion_budget=support_strategy.suggestion_budget,
+                personalization_tone=support_strategy.personalization_tone,
+                response_goal=support_strategy.response_goal,
+                rationale=support_strategy.rationale,
+            ),
+            memory_summary=DemoMemorySummaryResponse(
+                recent_checkin_count=memory_summary.recent_checkin_count,
+                dominant_negative_patterns=memory_summary.dominant_negative_patterns,
+                dominant_positive_patterns=memory_summary.dominant_positive_patterns,
+                recurring_triggers=memory_summary.recurring_triggers,
+                recurring_social_contexts=memory_summary.recurring_social_contexts,
+                last_seen_emotional_direction=memory_summary.last_seen_emotional_direction,
+                pattern_detected=memory_summary.pattern_detected,
+            ),
+            insight_features=DemoInsightFeaturesResponse(
+                is_negative_checkin=insight_features.is_negative_checkin,
+                is_positive_checkin=insight_features.is_positive_checkin,
+                work_trigger=insight_features.work_trigger,
+                relationship_strain=insight_features.relationship_strain,
+                deadline_related=insight_features.deadline_related,
+                loneliness_related=insight_features.loneliness_related,
+                positive_anchor_candidate=insight_features.positive_anchor_candidate,
+                social_support_signal=insight_features.social_support_signal,
+                high_stress_flag=insight_features.high_stress_flag,
+            ),
+            memory_records_used=len(recent_memory),
+        ),
     )
+    memory_store.append(
+        build_emotional_memory_record(
+            user_id="vi-demo",
+            transcript=text,
+            topic_tags=topic_tags,
+            risk_level=risk_level,
+            normalized_state=normalized_state,
+            support_strategy=support_strategy,
+            insight_features=insight_features,
+            response_provider=support_provider_name,
+            response_mode=str(emotion_analysis["response_mode"]),
+            suggestion_given=gentle_suggestion is not None,
+            support_metadata={
+                "response_goal": support_strategy.response_goal,
+                "support_focus": support_strategy.support_focus,
+            },
+        )
+    )
+    return payload

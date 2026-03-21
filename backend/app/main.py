@@ -16,8 +16,6 @@ from app.api.resources import router as resources_router
 from app.api.users import router as users_router
 from app.core.config import get_settings
 from app.core.errors import http_exception_handler, validation_exception_handler
-from app.db.base import Base
-from app.db.session import engine
 from app.models import JournalEntry, ProcessingAttempt, TreeState, TreeStateEvent, User, UserPreference, WrapupSnapshot
 
 settings = get_settings()
@@ -30,8 +28,6 @@ def initialize_database() -> None:
     User.__table__
     UserPreference.__table__
     WrapupSnapshot.__table__
-    if settings.auto_create_tables_for_dev and settings.database_url.startswith("sqlite"):
-        Base.metadata.create_all(bind=engine)
 
 
 @asynccontextmanager

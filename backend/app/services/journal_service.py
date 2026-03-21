@@ -48,3 +48,90 @@ def deserialize_topic_tags(entry: JournalEntry) -> list[str]:
 
 def deserialize_risk_flags(entry: JournalEntry) -> list[str]:
     return json.loads(entry.risk_flags_text) if entry.risk_flags_text else []
+
+
+def deserialize_response_metadata(entry: JournalEntry) -> dict[str, object]:
+    if not entry.response_metadata_text:
+        return {}
+    try:
+        metadata = json.loads(entry.response_metadata_text)
+    except json.JSONDecodeError:
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def get_entry_source_type(entry: JournalEntry) -> str:
+    metadata = deserialize_response_metadata(entry)
+    source_type = metadata.get("source_type")
+    if isinstance(source_type, str) and source_type:
+        return source_type
+    return "voice" if entry.audio_path else "text"
+
+
+def get_entry_secondary_labels(entry: JournalEntry) -> list[str]:
+    metadata = deserialize_response_metadata(entry)
+    emotion_analysis = metadata.get("emotion_analysis")
+    if isinstance(emotion_analysis, dict):
+        secondary_labels = emotion_analysis.get("secondary_labels")
+        if isinstance(secondary_labels, list):
+            return [str(label) for label in secondary_labels]
+    return []
+
+
+def build_excerpt(text: str | None, max_length: int = 120) -> str | None:
+    if text is None:
+        return None
+    normalized = " ".join(text.split()).strip()
+    if not normalized:
+        return None
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 1].rstrip() + "…"
+
+
+def get_entry_emotion_analysis(entry: JournalEntry) -> dict[str, object]:
+    metadata = deserialize_response_metadata(entry)
+    emotion_analysis = metadata.get("emotion_analysis")
+    if isinstance(emotion_analysis, dict):
+        return emotion_analysis
+    return {}
+
+
+def get_entry_normalized_state(entry: JournalEntry) -> dict[str, object]:
+    metadata = deserialize_response_metadata(entry)
+    normalized_state = metadata.get("normalized_state")
+    if isinstance(normalized_state, dict):
+        return normalized_state
+    return {}
+
+
+def get_entry_support_strategy(entry: JournalEntry) -> dict[str, object]:
+    metadata = deserialize_response_metadata(entry)
+    strategy = metadata.get("support_strategy")
+    if isinstance(strategy, dict):
+        return strategy
+    return {}
+
+
+def get_entry_memory_summary(entry: JournalEntry) -> dict[str, object]:
+    metadata = deserialize_response_metadata(entry)
+    memory_summary = metadata.get("memory_summary")
+    if isinstance(memory_summary, dict):
+        return memory_summary
+    return {}
+
+
+def get_entry_dominant_signals(entry: JournalEntry) -> list[str]:
+    emotion_analysis = get_entry_emotion_analysis(entry)
+    dominant_signals = emotion_analysis.get("dominant_signals")
+    if isinstance(dominant_signals, list):
+        return [str(item) for item in dominant_signals]
+    return json.loads(entry.dominant_signals_text) if entry.dominant_signals_text else []
+
+
+def get_entry_context_tags(entry: JournalEntry) -> list[str]:
+    emotion_analysis = get_entry_emotion_analysis(entry)
+    context_tags = emotion_analysis.get("context_tags")
+    if isinstance(context_tags, list):
+        return [str(item) for item in context_tags]
+    return []

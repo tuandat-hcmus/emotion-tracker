@@ -51,7 +51,20 @@ def detect_safety_risk(transcript: str) -> dict[str, str | list[str]]:
     return {"risk_level": "low", "risk_flags": []}
 
 
-def generate_safe_support_message(risk_level: str) -> str:
+def generate_safe_support_message(risk_level: str, language: str = "en") -> str:
+    normalized_language = language.strip().lower()
+    if normalized_language == "vi":
+        if risk_level == "high":
+            return (
+                "Mình đang xem điều bạn vừa nói là rất nghiêm trọng. "
+                "Ngay lúc này, hãy ưu tiên ở gần một người bạn tin hoặc liên hệ hỗ trợ khẩn cấp nơi bạn đang ở."
+            )
+        if risk_level == "medium":
+            return (
+                "Nghe như bạn đang ở trong một giai đoạn rất khó khăn. "
+                "Nếu có thể, hãy liên hệ với một người bạn tin để họ ở cạnh hoặc lắng nghe bạn ngay lúc này."
+            )
+        return ""
     if risk_level == "high":
         return (
             "I'm taking the seriousness of what you just said seriously. "
@@ -63,3 +76,7 @@ def generate_safe_support_message(risk_level: str) -> str:
             "If you can, please reach out to someone you trust to stay with you or listen right now."
         )
     return ""
+
+
+def should_use_standard_support_rendering(risk_level: str) -> bool:
+    return risk_level == "low"

@@ -14,7 +14,7 @@ from app.schemas.user import (
     TreeTimelineResponse,
     UserSummaryResponse,
 )
-from app.services.journal_service import deserialize_topic_tags, list_user_entries
+from app.services.journal_service import build_excerpt, get_entry_secondary_labels, get_entry_source_type, list_user_entries
 from app.services.summary_service import build_user_summary
 from app.services.tree_service import build_tree_timeline
 
@@ -76,17 +76,16 @@ def get_user_entries(
         offset=offset,
         items=[
             JournalHistoryItemResponse(
+                id=item.id,
                 entry_id=item.id,
                 status=item.processing_status,
                 session_type=item.session_type,
-                transcript_text=item.transcript_text,
-                ai_response=item.ai_response,
-                emotion_label=item.emotion_label,
-                valence_score=item.valence_score,
-                energy_score=item.energy_score,
+                source_type=get_entry_source_type(item),
+                transcript_excerpt=build_excerpt(item.transcript_text),
+                ai_response_excerpt=build_excerpt(item.ai_response),
+                primary_label=item.emotion_label,
+                secondary_labels=get_entry_secondary_labels(item),
                 stress_score=item.stress_score,
-                risk_level=item.risk_level,
-                topic_tags=deserialize_topic_tags(item),
                 created_at=item.created_at,
                 updated_at=item.updated_at,
             )

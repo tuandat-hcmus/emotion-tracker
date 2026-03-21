@@ -65,5 +65,6 @@ def infer_legacy_emotion(text: str) -> dict[str, object]:
         "confidence": round(ranked[0][1], 2),
         "source": "text",
         "raw_model_labels": [emotion for emotion, _ in ranked],
+        "ranked_emotions": ranked,
         "provider_name": "legacy_heuristic",
     }

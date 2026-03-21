@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user_required
 from app.models.user import User
-from app.models.user_preference import UserPreference
-from app.schemas.checkin import EmotionAnalysisResponse, RespondPreviewRequest, RespondPreviewResponse, ResponsePlanResponse, ResponseQuoteResponse
+from app.schemas.checkin import RespondPreviewRequest, RespondPreviewResponse
 from app.schemas.me import (
     CalendarResponse,
     CheckinStatusResponse,
@@ -21,8 +20,8 @@ from app.schemas.me import (
 )
 from app.services.calendar_service import build_calendar, build_checkin_status, resolve_user_today, resolve_user_timezone
 from app.services.home_service import build_home_response
-from app.services.ai_support_service import build_support_package
 from app.services.preferences_service import get_or_create_preferences, upsert_preferences
+from app.services.respond_preview_service import build_respond_preview_response
 from app.services.user_service import update_display_name
 from app.services.wrapup_service import generate_wrapup_snapshot, get_latest_wrapup_snapshot
 
@@ -148,41 +147,8 @@ def post_respond_preview(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> RespondPreviewResponse:
-    preferences = db.query(UserPreference).filter(UserPreference.user_id == current_user.id).one_or_none()
-    support_package = build_support_package(
-        transcript=payload.transcript,
-        user_id=current_user.id,
-        audio_path=None,
-        quote_opt_in=preferences.quote_opt_in if preferences is not None else True,
-        override_risk_level=payload.override_risk_level,
-        override_topic_tags=payload.override_topic_tags,
-    )
-    quote = support_package["quote"]
-    return RespondPreviewResponse(
-        emotion_analysis=EmotionAnalysisResponse(
-            emotion_label=str(support_package["emotion_analysis"]["emotion_label"]),
-            valence_score=float(support_package["emotion_analysis"]["valence_score"]),
-            energy_score=float(support_package["emotion_analysis"]["energy_score"]),
-            stress_score=float(support_package["emotion_analysis"]["stress_score"]),
-            social_need_score=float(support_package["emotion_analysis"]["social_need_score"]),
-            confidence=float(support_package["emotion_analysis"]["confidence"]),
-            dominant_signals=list(support_package["emotion_analysis"]["dominant_signals"]),
-            response_mode=str(support_package["emotion_analysis"]["response_mode"]),
-            language=str(support_package["emotion_analysis"]["language"]),
-            primary_emotion=str(support_package["emotion_analysis"]["primary_emotion"]),
-            secondary_emotions=list(support_package["emotion_analysis"]["secondary_emotions"]),
-            source=str(support_package["emotion_analysis"]["source"]),
-            raw_model_labels=list(support_package["emotion_analysis"]["raw_model_labels"]),
-            provider_name=str(support_package["emotion_analysis"]["provider_name"]),
-        ),
-        topic_tags=list(support_package["topic_tags"]),
-        risk_level=str(support_package["risk_level"]),
-        risk_flags=list(support_package["risk_flags"]),
-        response_plan=ResponsePlanResponse(**support_package["response_plan"]),
-        empathetic_response=str(support_package["empathetic_response"]),
-        gentle_suggestion=(
-            str(support_package["gentle_suggestion"]) if support_package["gentle_suggestion"] is not None else None
-        ),
-        quote=ResponseQuoteResponse(**quote.model_dump()) if quote is not None else None,
-        ai_response=str(support_package["ai_response"]),
+    return build_respond_preview_response(
+        db=db,
+        current_user=current_user,
+        payload=payload,
     )

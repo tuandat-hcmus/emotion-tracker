@@ -1,637 +1,236 @@
-# Emotion Voice Backend MVP
+# Emotion Backend
 
-Backend MVP for a voice journal / emotional companion app built with FastAPI, SQLAlchemy, and SQLite/PostgreSQL. This phase adds Alembic migrations, PostgreSQL support, production-friendly health endpoints, configurable CORS, and lightweight structured API errors.
+## Overview
 
-## Features
+This backend powers an emotional wellness journaling product built on FastAPI, PostgreSQL, sync SQLAlchemy, and Alembic.
 
-- Health check endpoint
-- Liveness and readiness endpoints
-- Auth register/login/me endpoints
-- Audio upload endpoint
-- Journal entry processing endpoint
-- Journal entry async processing endpoint
-- Journal entry reprocess endpoint
-- Journal entry delete endpoint
-- Journal entry detail endpoint
-- Journal processing attempts endpoint
-- Current user profile endpoint
-- Current user preferences endpoints
-- Frontend-ready home dashboard endpoint
-- Daily check-in status endpoint
-- Calendar / emotion history endpoint
-- Weekly and monthly wrap-up snapshot endpoints
-- Deterministic demo seed script for smoke/manual testing
-- Optional dev-only demo seed/reset endpoints
-- Richer multi-signal emotion analysis
-- Model-driven AI emotion core with language routing and optional fusion hooks
-- Structured empathy planning and response generation
-- Dev-friendly text-only response preview endpoint
-- User tree state endpoint
-- User tree timeline endpoint
-- User summary endpoint
-- User journal history endpoint
-- Crisis resources endpoint
-- Local audio storage in `uploads/`
-- SQLite persistence
-- PostgreSQL support via `DATABASE_URL`
-- Alembic migrations
-- Mock or provider-based speech-to-text
-- Heuristic emotion analysis
-- Hugging Face model-driven text emotion inference with graceful fallback
-- Heuristic topic tagging
-- Mock or provider-based empathetic response generation
-- Rule-based safety detection
-- Persistent tree state updates per processed check-in
-- Curated quote selection tied to mood and `quote_opt_in`
-- Heuristic weekly/monthly wrap-up snapshot generation
-- Idempotent tree recomputation for reprocess and delete flows
-- Processing audit attempts per run
-- Upload validation for extension, MIME type, and size
-- JWT bearer authentication with optional dev bypass
-- User profile and preference storage
-- Configurable CORS
-- Structured API errors for common failures
-- Pytest API coverage
-
-## Project Structure
-
-```text
-app/
-  api/
-  core/
-  db/
-  models/
-  schemas/
-  services/
-uploads/
-```
-
-## Setup
-
-1. Create and activate a Python 3.11+ virtual environment.
-2. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-For model-driven local emotion inference, also install:
-
-```bash
-pip install -r requirements-ai.txt
-```
-
-3. Apply migrations:
-
-```bash
-alembic upgrade head
-```
-
-4. Run the app:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-5. Open Swagger UI:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-## Run Tests
-
-```bash
-pytest
-```
-
-## Migrations
-
-Create a new migration:
-
-```bash
-alembic revision --autogenerate -m "describe change"
-```
-
-Apply migrations:
-
-```bash
-alembic upgrade head
-```
-
-Rollback one migration:
-
-```bash
-alembic downgrade -1
-```
-
-## Environment
-
-The app reads configuration from `.env`:
-
-```env
-APP_NAME=Emotion Voice Backend
-DATABASE_URL=sqlite:///./app.db
-DB_ECHO=false
-AUTO_CREATE_TABLES_FOR_DEV=true
-BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:5173
-ENABLE_DEV_SEED_ENDPOINTS=false
-UPLOADS_DIR=uploads
-USE_MOCK_STT=true
-USE_MOCK_RESPONSE=true
-STT_PROVIDER=mock
-RESPONSE_PROVIDER=mock
-OPENAI_API_KEY=
-OPENAI_TEXT_MODEL=gpt-4o-mini
-OPENAI_AUDIO_MODEL=gpt-4o-mini-transcribe
-OPENAI_REQUEST_TIMEOUT_SECONDS=30
-EMOTION_PROVIDER=model_local
-ENABLE_CANONICAL_MODELS=true
-ENABLE_PUBLIC_TEXT_MODELS=true
-ENABLE_TEXT_EMOTION=true
-ENABLE_AUDIO_EMOTION=false
-ENABLE_HEURISTIC_FALLBACK=true
-DEFAULT_TEXT_PROVIDER=public
-DEFAULT_AUDIO_PROVIDER=sensevoice
-DEFAULT_FALLBACK_PROVIDER=multilingual
-HF_HOME=
-MODEL_CACHE_DIR=
-HF_TOKEN=
-VI_PUBLIC_MODEL_PROVIDER=hf_pipeline
-VI_PUBLIC_MODEL_NAME=visolex/phobert-emotion
-VI_CANONICAL_MODEL_DIR=backend/models/vi_canonical_emotion
-VI_CANONICAL_BACKBONE=visolex/phobert-emotion
-ZH_PUBLIC_MODEL_PROVIDER=hf_pipeline
-ZH_PUBLIC_MODEL_NAME=Johnson8187/Chinese-Emotion-Small
-ZH_CANONICAL_MODEL_DIR=backend/models/zh_canonical_emotion
-ZH_CANONICAL_BACKBONE=Johnson8187/Chinese-Emotion-Small
-MULTILINGUAL_MODEL_PROVIDER=hf_pipeline
-MULTILINGUAL_MODEL_NAME=MilaNLProc/xlm-emo-t
-SUPPORTED_VI_MODELS=visolex/phobert-emotion,uitnlp/visobert,vinai/phobert-large
-SUPPORTED_ZH_MODELS=Johnson8187/Chinese-Emotion-Small,hfl/chinese-roberta-wwm-ext,Langboat/mengzi-bert-base
-SUPPORTED_MULTILINGUAL_MODELS=MilaNLProc/xlm-emo-t
-SUPPORTED_AUDIO_MODELS=SenseVoiceSmall
-CANONICAL_MODEL_ROOT=models
-CANONICAL_CONFIDENCE_THRESHOLD=0.58
-CANONICAL_HYBRID_WEIGHT=0.7
-AUDIO_EMOTION_PROVIDER=sensevoice
-AUDIO_EMOTION_MODEL_NAME=SenseVoiceSmall
-AUDIO_STT_PROVIDER=existing
-AUDIO_USE_TEXT_TRANSCRIPT=true
-AI_CONFIDENCE_THRESHOLD=0.50
-AI_LOW_CONFIDENCE_HYBRID=true
-AI_DEVICE=cpu
-AI_BATCH_SIZE=4
-MAX_UPLOAD_MB=20
-ALLOWED_AUDIO_EXTENSIONS=.wav,.mp3,.m4a,.ogg,.webm
-JWT_SECRET_KEY=dev-secret-change-me
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-AUTH_OPTIONAL_FOR_DEV=true
-```
-
-Database examples:
-- SQLite local dev: `sqlite:///./app.db`
-- PostgreSQL: `postgresql+psycopg://postgres:postgres@localhost:5432/emotion`
-
-Provider notes:
-- `mock` mode works without any external API key and is the default local-development path.
-- `openai` mode is optional and only used when `STT_PROVIDER=openai` or `RESPONSE_PROVIDER=openai`.
-- Real provider mode requires `OPENAI_API_KEY` and the `openai` Python package.
-- If a real provider call fails during processing, the journal entry is marked `failed` and the API returns a clear error response.
-- The AI emotion core uses lazy Hugging Face model loading and does not download models at import time.
-- If transformers or local models are unavailable, text emotion inference degrades to a deterministic heuristic fallback so local development still works.
-- `ENABLE_AUDIO_EMOTION=false` keeps the optional audio branch disabled; the fusion layer automatically falls back to text-only when audio inference is unavailable.
-
-## AI Core
-
-The backend now uses a model-shaped AI core under `app/services/ai_core/`.
-
-- Product canonical schema:
+Current architectural rules:
+- the local Hugging Face model is the only source of truth for emotion detection
+- the frontend-facing emotion schema is always the canonical 7-label set:
+  - `anger`
+  - `disgust`
+  - `fear`
   - `joy`
   - `sadness`
-  - `anxiety`
-  - `anger`
-  - `overwhelm`
-  - `gratitude`
-  - `loneliness`
+  - `surprise`
   - `neutral`
-- Config-driven inference order:
-  - canonical fine-tuned model for the detected language, if enabled and artifacts exist
-  - selected public language-specific model for the detected language
-  - selected multilingual fallback model
-  - heuristic fallback as the final safety net
-- Directly runnable public classifiers:
-  - Vietnamese: `visolex/phobert-emotion`
-  - Chinese: `Johnson8187/Chinese-Emotion-Small`
-  - Multilingual: `MilaNLProc/xlm-emo-t`
-- Supported fine-tuning backbones only:
-  - Vietnamese: `uitnlp/visobert`, `vinai/phobert-large`
-  - Chinese: `hfl/chinese-roberta-wwm-ext`, `Langboat/mengzi-bert-base`
-- Audio provider targets:
-  - `SenseVoiceSmall` is represented in the registry and selected by config, but this repo currently keeps audio emotion non-blocking unless a runtime integration is added.
-- The public HF models are treated as weak supervision / fallback paths, not direct product truth.
-- Canonical training data lives in:
-  - `datasets/canonical_emotion_seed_vi.jsonl`
-  - `datasets/canonical_emotion_seed_zh.jsonl`
-- Annotation rules live in `datasets/ANNOTATION_GUIDE.md`
-- Language detection is lightweight and runtime-safe.
-- Canonical normalized output includes:
-  - `language`
-  - `primary_emotion`
-  - `secondary_emotions`
-  - `valence`
-  - `energy`
-  - `stress`
-  - `confidence`
-  - `source`
-  - `raw_model_labels`
-  - `provider_name`
-- Safety remains conservative and is still applied after emotion inference.
-- Response generation, tree recomputation, wrap-ups, and existing legacy fields continue to work from normalized AI output.
-- If the canonical head is low-confidence, inference records `low_confidence=true` in metadata and can blend with the current public-model route instead of silently presenting a weak prediction as strong.
+- deterministic backend services own:
+  - state normalization
+  - safety
+  - response planning
+  - response policy
+- Gemini is renderer only
+- postcheck enforces evidence-bounded output and rejects unsupported specifics
 
-Pre-download models:
+The system is not designed as a full autonomous agent. Gemini must not reinterpret history, re-infer emotion, or invent hidden facts.
 
-```bash
-cd backend
-python -m scripts.download_models --list-supported
-python -m scripts.download_models --all --respect-config
-python -m scripts.download_models --model vi-public --respect-config
-python -m scripts.download_models --model zh-public --respect-config
-python -m scripts.download_models --model multilingual --respect-config
-python -m scripts.download_models --model audio --respect-config
-python -m scripts.download_models --model canonical --respect-config
-```
+## Current Processing Flows
 
-Install AI dependencies:
+### Text Check-in
 
-```bash
-pip install -r requirements.txt -r requirements-ai.txt
-```
+`POST /v1/checkins/text`
 
-Train canonical models:
+Flow:
+1. validate and normalize text
+2. load lightweight recent context from stored snapshots
+3. run local emotion inference on the current text
+4. build deterministic companion state and response plan
+5. render the final supportive response
+6. run postcheck
+7. persist transcript, snapshots, and response fields
 
-```bash
-cd backend
-python -m training.train_canonical_emotion --language all
-```
+### Voice Check-in
 
-Model artifacts are written to:
+`POST /v1/checkins/upload`
+`POST /v1/checkins/{entry_id}/process`
 
-```text
-models/vi_canonical_emotion/
-models/zh_canonical_emotion/
-```
+Flow:
+1. accept and store audio reference
+2. run STT
+3. normalize transcript
+4. send transcript through the same downstream text pipeline
+5. persist transcript, snapshots, and response fields
 
-Run the canonical benchmark and report:
+Voice does not have a separate emotion pipeline. STT only produces transcript text.
 
-```bash
-python -m benchmarks.evaluate_canonical_models
-```
+## Stable Boundaries
 
-Example config presets:
+- emotion inference: local HF only
+- companion state and strategy: deterministic backend services
+- planning and policy: deterministic backend services
+- rendering: Gemini or mock/template renderer
+- enforcement: postcheck
+- frontend contract: canonical 7-label schema
 
-Lightweight local CPU mode:
+## Response Architecture
+
+Current response layers:
+1. safety layer
+2. deterministic planning layer
+3. response policy layer
+4. renderer layer
+5. postcheck layer
+6. final API contract shaping
+
+Important behavior:
+- English is the default response language unless a supported override is clear
+- medium/high-risk inputs bypass normal renderer behavior
+- the final response should stay evidence-bounded and abstract unless the transcript supports more specificity
+
+## Main Contracts
+
+Top-level response fields used by check-in and preview flows:
+- `emotion_analysis`
+- `topic_tags`
+- `risk_level`
+- `risk_flags`
+- `response_plan`
+- `empathetic_response`
+- `follow_up_question`
+- `gentle_suggestion`
+- `quote`
+- `ai_response`
+- `ai`
+
+`emotion_analysis` uses:
+- `primary_label`
+- `secondary_labels`
+- `all_labels`
+- `scores`
+- `threshold`
+- `confidence`
+- `provider_name`
+- `source`
+- `language`
+- `valence_score`
+- `energy_score`
+- `stress_score`
+- `social_need_score`
+- `response_mode`
+- `dominant_signals`
+- `context_tags`
+- `enrichment_notes`
+
+`ai.emotion` mirrors the same canonical contract.
+
+`ai.state` exposes canonical:
+- `primary_label`
+- `secondary_labels`
+
+## Persistence and History
+
+Journal entries persist:
+- raw text when provided directly
+- normalized transcript text
+- transcript confidence
+- canonical emotion snapshot
+- risk snapshot
+- response plan snapshot
+- normalized state snapshot
+- strategy snapshot
+- lightweight memory snapshot
+- final response fields
+
+History retrieval is intentionally lightweight and frontend-friendly. Recent entry items expose:
+- `id`
+- `entry_id`
+- `status`
+- `session_type`
+- `source_type`
+- `transcript_excerpt`
+- `ai_response_excerpt`
+- `primary_label`
+- `secondary_labels`
+- `stress_score`
+- `created_at`
+- `updated_at`
+
+## Wrapups and Summaries
+
+Weekly and monthly wrapups are generated from persisted journal entries and stored AI snapshots by default. Historical emotion inference is not re-run unless explicitly needed elsewhere.
+
+Derived persisted-data features include:
+- dominant emotional patterns
+- recurring triggers
+- workload/deadline patterns
+- positive anchors
+- emotional direction trend
+- high-stress frequency
+- concise summary text
+
+These are produced inside:
+- `app/services/wrapup_service.py`
+- `app/services/summary_service.py`
+- `app/services/journal_service.py`
+
+## Configuration
+
+Common env vars:
+
 ```env
-ENABLE_CANONICAL_MODELS=true
-VI_PUBLIC_MODEL_NAME=visolex/phobert-emotion
-ZH_PUBLIC_MODEL_NAME=Johnson8187/Chinese-Emotion-Small
-MULTILINGUAL_MODEL_NAME=MilaNLProc/xlm-emo-t
-ENABLE_AUDIO_EMOTION=false
-AI_DEVICE=cpu
+DATABASE_URL=postgresql+psycopg://...
+EMOTION_MODEL_ENABLED=true
+EMOTION_MODEL_DIR=models/artifacts/emotion_xlmr
+EMOTION_MODEL_DEVICE=auto
+GEMINI_ENABLED=true
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash-lite
+RESPONSE_PROVIDER=gemini
+USE_MOCK_RESPONSE=false
+RESPONSE_DEFAULT_LANGUAGE=en
+RESPONSE_USE_STRUCTURED_OUTPUT=true
+ACCESS_TOKEN_EXPIRE_MINUTES=10080
 ```
 
-Stronger VI/ZH canonical mode:
-```env
-ENABLE_CANONICAL_MODELS=true
-VI_CANONICAL_BACKBONE=vinai/phobert-large
-ZH_CANONICAL_BACKBONE=hfl/chinese-roberta-wwm-ext
-VI_PUBLIC_MODEL_NAME=visolex/phobert-emotion
-ZH_PUBLIC_MODEL_NAME=Johnson8187/Chinese-Emotion-Small
-AI_LOW_CONFIDENCE_HYBRID=true
-```
+Notes:
+- if `GEMINI_API_KEY` is not set and `RESPONSE_PROVIDER=gemini`, response rendering will fail
+- low-risk rendering may use Gemini when enabled
+- non-low-risk paths still bypass the normal renderer
 
-Multilingual fallback mode:
-```env
-ENABLE_CANONICAL_MODELS=false
-ENABLE_PUBLIC_TEXT_MODELS=true
-MULTILINGUAL_MODEL_NAME=MilaNLProc/xlm-emo-t
-DEFAULT_FALLBACK_PROVIDER=multilingual
-```
+## Local Development
 
-Audio-enabled mode:
-```env
-ENABLE_AUDIO_EMOTION=true
-AUDIO_EMOTION_PROVIDER=sensevoice
-AUDIO_EMOTION_MODEL_NAME=SenseVoiceSmall
-AUDIO_USE_TEXT_TRANSCRIPT=true
-```
-
-Auth notes:
-- `AUTH_OPTIONAL_FOR_DEV=true` keeps local/dev flows easy: existing protected routes still work without a bearer token.
-- `AUTH_OPTIONAL_FOR_DEV=false` enables strict mode: protected routes require a valid JWT and enforce ownership.
-- Even in optional-dev mode, if a bearer token is present the backend uses that authenticated user for ownership decisions.
-
-Startup notes:
-- Production/postgres flow should run `alembic upgrade head` before starting the app.
-- SQLite local dev can still auto-create tables when `AUTO_CREATE_TABLES_FOR_DEV=true`.
-- Tests continue to use temporary SQLite databases and do not require PostgreSQL.
-
-## API Summary
-
-- `GET /` health check
-- `GET /health/live` liveness endpoint
-- `GET /health/ready` readiness endpoint with DB connectivity check
-- `POST /v1/auth/register` register with email and password
-- `POST /v1/auth/login` receive JWT bearer token
-- `GET /v1/auth/me` fetch the authenticated user
-- `GET /v1/me` fetch current profile and preference summary
-- `PATCH /v1/me` update `display_name`
-- `GET /v1/me/preferences` fetch current preferences
-- `PUT /v1/me/preferences` create or update preferences
-- `GET /v1/me/home` fetch an aggregated home/dashboard payload for the authenticated user
-- `GET /v1/me/checkin-status?date=YYYY-MM-DD` fetch daily check-in completion and latest entry signals
-- `GET /v1/me/calendar?days=30` fetch one daily mood/calendar item per day in ascending date order, including zero-entry days
-- `GET /v1/me/wrapups/weekly/latest` fetch the latest weekly wrap-up snapshot, generating the current week on demand if missing
-- `GET /v1/me/wrapups/monthly/latest` fetch the latest monthly wrap-up snapshot, generating the current month on demand if missing
-- `POST /v1/me/wrapups/regenerate` regenerate and upsert a weekly or monthly wrap-up snapshot for an optional anchor date
-- `POST /v1/me/respond-preview` preview emotion analysis, response planning, and supportive output from plain text without persisting a check-in
-- `POST /v1/dev/seed-demo-data` dev-only endpoint to create deterministic demo data when `ENABLE_DEV_SEED_ENDPOINTS=true`
-- `POST /v1/dev/reset-demo-data` dev-only endpoint to remove the demo user/data when `ENABLE_DEV_SEED_ENDPOINTS=true`
-- `POST /v1/checkins/upload` upload audio with `file`, `user_id`, `session_type`
-- `POST /v1/checkins/{entry_id}/process` process a journal entry with optional `override_transcript`
-- `POST /v1/checkins/{entry_id}/process-async` accept a journal entry for background processing
-- `POST /v1/checkins/{entry_id}/reprocess` rerun processing for a processed or failed entry
-- `DELETE /v1/checkins/{entry_id}` delete a journal entry and remove its audio file if present
-- `GET /v1/checkins/{entry_id}` fetch a journal entry
-- `GET /v1/checkins/{entry_id}/attempts` fetch processing attempts newest first
-- `GET /v1/users/{user_id}/tree` fetch the user tree state
-- `GET /v1/users/{user_id}/tree/timeline?days=30` fetch daily tree/chart data in ascending date order
-- `GET /v1/users/{user_id}/summary?days=30` fetch structured recent summary metrics
-- `GET /v1/users/{user_id}/entries` fetch paginated journal history with optional filters
-- `GET /v1/resources/crisis?country=VN` fetch lightweight static crisis resources
-
-Journal history query params:
-- `limit` default `20`, max `100`
-- `offset` default `0`
-- `session_type` optional
-- `status` optional
-- `from_date` optional `YYYY-MM-DD`
-- `to_date` optional `YYYY-MM-DD`
-
-## Feature Notes
-
-- Registration stores hashed passwords and login returns JWT bearer tokens.
-- Common error responses now include `error.code`, `error.message`, and `error.details` while preserving `detail` for compatibility.
-- User preferences are stored separately with defaults for locale, timezone, reminders, and daily check-in goals.
-- `PUT /v1/me/preferences` is idempotent and creates defaults on first use if needed.
-- `GET /v1/me/home` is intended as the frontend home-screen payload so the app can render user, preference, today, tree, trend, quote, and wrap-up metadata from one call.
-- `GET /v1/me/checkin-status` resolves the requested day in the user's saved timezone when valid and falls back to UTC if the timezone value is invalid.
-- `GET /v1/me/calendar` builds directly from journal entries only, returns one item per requested day, and uses semantic mood tokens such as `bright`, `calm`, `neutral`, `low`, and `heavy` instead of raw UI colors.
-- Quotes are local curated templates only. If `quote_opt_in` is `false`, the home endpoint returns `"quote": null`. High-risk states use calm/supportive quote variants only.
-- Emotion analysis now uses deterministic multi-signal inference from transcript text and weighs cues such as loneliness, emptiness, overwhelm, frustration, exhaustion, gratitude, pride, calm, uncertainty, and mixed-contrast phrasing. It still returns additive fields such as `social_need_score`, `confidence`, `dominant_signals`, and `response_mode`.
-- The canonical AI output is model-driven first and then normalized into the app's existing downstream fields. Rule-based logic is now limited to safety escalation, light normalization, and legacy compatibility.
-- `response_mode` is a stable backend hint for tone selection. Current values include `validating_gentle`, `grounding_soft`, `supportive_reflective`, `celebratory_warm`, `low_energy_comfort`, and `high_risk_safe`.
-- Supportive response generation is separated into empathy, optional gentle suggestion, and optional quote. The mock path stays deterministic but now varies tone more naturally for lonely, overwhelmed, frustrated, positive, and mixed states. Existing `ai_response` is still populated for backward compatibility as a combined legacy field.
-- `POST /v1/me/respond-preview` reuses the real analysis/planning/response services but does not write journal history, mutate tree state, or create wrap-up data.
-- Mock mode remains deterministic and template-based for tests and local development. Provider mode can still be enabled for response generation and is normalized into the same structured response contract.
-- Transcript-only emotion inference is still heuristic and limited by what the user explicitly says. It should be treated as supportive product behavior, not as diagnosis, therapy, or clinical assessment.
-- The optional audio emotion path is scaffolded behind a provider interface but currently degrades gracefully to text-only unless a real audio provider is configured later.
-- Wrap-up generation is deterministic, heuristic/template-based, and non-LLM for now. Weekly periods use Monday-Sunday boundaries and monthly periods use calendar-month boundaries.
-- If no stored wrap-up exists yet, the latest weekly/monthly endpoints generate the current period on demand and persist it.
-- Wrap-up snapshots are stored in `wrapup_snapshots` and upserted per `user_id + period_type + period_start + period_end`.
-- Wrap-ups use processed entries only. With little or no data they still return a structured payload with zero counts, null highlights where appropriate, and a template closing message.
-- Demo data seeding is deterministic by default, creates one documented demo user, builds about 30 days of processed entries with some no-entry days and heavier days, recomputes tree state, and generates wrap-up snapshots for smoke testing.
-- Dev seed/reset endpoints are local-development helpers only. Leave `ENABLE_DEV_SEED_ENDPOINTS=false` outside dev/test usage.
-- `GET /v1/resources/crisis` is a lightweight static product-support endpoint and not a claim of complete or medical guidance.
-- This backend provides supportive wellness-oriented reflections only. It does not provide diagnosis, crisis assessment, or therapy.
-- Safety detection is rule-based and stores `risk_level` plus `risk_flags` on each processed journal entry.
-- High-risk and medium-risk transcripts return supportive safety-oriented messages instead of the normal empathetic response.
-- Tree state is stored persistently in `tree_states` and each processed check-in writes derived `tree_state_events`.
-- Tree updates are handled by recomputing from processed entries for that user, so reprocessing the same entry does not double-count growth and deleting an entry rebalances the tree cleanly.
-- Summary responses are structured JSON only and do not use LLM-generated text.
-- Uploads are rejected before saving if the extension is unsupported, the MIME type is obviously invalid, or the file exceeds `MAX_UPLOAD_MB`.
-- Allowed default upload formats are `.wav`, `.mp3`, `.m4a`, `.ogg`, and `.webm`.
-- STT and response generation now use provider-based services so mock mode and optional real-provider mode share the same processing flow.
-- Every sync process, async process, and reprocess run creates a `processing_attempts` record with provider names, trigger type, status, and optional error message.
-- `process-async` uses FastAPI `BackgroundTasks`, so it is lightweight and local-process only. It is suitable for MVP usage but not durable across restarts or multi-worker deployments.
-- Flexible list fields such as topics and risk flags are stored as JSON strings in SQLite text columns.
-- Alembic is now the primary schema-management path.
-- `create_all` is only used for local SQLite dev bootstrap when `AUTO_CREATE_TABLES_FOR_DEV=true`.
-- CORS is disabled by default unless `BACKEND_CORS_ORIGINS` is configured.
-
-## Auth Examples
-
-Register:
+From `backend/`:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"secret123","display_name":"Demo"}'
-```
-
-Login:
-
-```bash
-curl -X POST http://127.0.0.1:8000/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com","password":"secret123"}'
-```
-
-Authenticated request:
-
-```bash
-curl http://127.0.0.1:8000/v1/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-Respond preview:
-
-```bash
-curl -X POST http://127.0.0.1:8000/v1/me/respond-preview \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"transcript":"Mình hơi căng vì deadline công việc nhưng vẫn cố gắng."}'
-```
-
-Upload behavior:
-- In strict auth mode, authenticated uploads ignore the form `user_id` and use the token owner.
-- In optional dev mode with no token, uploads preserve the existing form-based `user_id` behavior for local workflows.
-
-## Running Locally
-
-SQLite dev workflow:
-
-```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-ai.txt
 cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-If you want the app to bootstrap tables for SQLite dev without running migrations first:
+Windows:
 
-```env
-AUTO_CREATE_TABLES_FOR_DEV=true
+```bat
+run-dev.bat
 ```
 
-PostgreSQL workflow:
+## Testing
+
+Typical test commands:
 
 ```bash
-set DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/emotion
-alembic upgrade head
-uvicorn app.main:app --reload
+python -m pytest
+python -m pytest backend/tests/test_app.py -q
+python -m pytest backend/tests/test_ai_core.py -q
+python -m pytest backend/tests/test_me_home.py -q
 ```
 
-## Demo Seed Data
+Focused coverage already exists for:
+- canonical response contracts
+- text and voice check-in flows
+- duplicate processing safety
+- failure-path coherence
+- response postcheck behavior
+- weekly/monthly wrapup generation
 
-Demo credentials:
-- Email: `demo@example.com`
-- Password: `demo123456`
+## Guidance For Future Changes
 
-Seed deterministic demo data:
-
-```bash
-python scripts/seed_demo_data.py --days 30 --email demo@example.com --password demo123456
-```
-
-Reset only:
-
-```bash
-python scripts/seed_demo_data.py --reset-only --email demo@example.com
-```
-
-Reset first, then reseed:
-
-```bash
-python scripts/seed_demo_data.py --reset --days 30
-```
-
-Enable dev-only seed endpoints:
-
-```env
-ENABLE_DEV_SEED_ENDPOINTS=true
-```
-
-Dev endpoint examples:
-
-```bash
-curl -X POST http://127.0.0.1:8000/v1/dev/seed-demo-data \
-  -H "Content-Type: application/json" \
-  -d '{"days":30,"email":"demo@example.com","password":"demo123456"}'
-
-curl -X POST http://127.0.0.1:8000/v1/dev/reset-demo-data \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@example.com"}'
-```
-
-Exact local workflow:
-
-```bash
-alembic upgrade head
-python scripts/seed_demo_data.py --reset --days 30
-uvicorn app.main:app --reload
-pytest
-```
-
-## English-First AI Core
-
-English is now the main product language.
-
-Primary product defaults:
-- `MAIN_LANGUAGE=en`
-- `AI_RENDER_LANGUAGE=en`
-- English public model: `SamLowe/roberta-base-go_emotions`
-- English secondary public model: `j-hartmann/emotion-english-distilroberta-base`
-- English canonical model dir: `backend/models/en_canonical_emotion`
-- English canonical backbone default: `roberta-base`
-
-Supported English public models:
-- `SamLowe/roberta-base-go_emotions`
-- `j-hartmann/emotion-english-distilroberta-base`
-- `j-hartmann/emotion-english-roberta-large`
-
-Run the English demo preset:
-
-```bash
-cp .env.demo.en.example .env
-alembic upgrade head
-uvicorn app.main:app --reload
-```
-
-English demo request:
-
-```bash
-curl -X POST http://127.0.0.1:8000/v1/demo/ai-core \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text":"I have been carrying too many deadlines at once, and my brain has felt packed tight all day.",
-    "context_tag":"work/school"
-  }'
-```
-
-Run the curated English demo cases:
-
-```bash
-PYTHONPATH=backend python backend/scripts/demo_en_ai_core.py
-```
-
-The script writes:
-- `backend/reports/en_ai_core_demo.md`
-
-English canonical datasets:
-- `backend/datasets/canonical_emotion_seed_en.jsonl`
-- `backend/datasets/canonical_emotion_realistic_en.jsonl`
-
-English evaluation:
-
-```bash
-HF_HUB_OFFLINE=1 PYTHONPATH=backend python -m benchmarks.evaluate_canonical_models
-```
-
-Current note on the English canonical path:
-- The active English canonical directory exists and is loadable today.
-- In this repo snapshot it is promoted from the lightweight canonical head, not a transformer-fine-tuned English backbone yet.
-- The report makes that explicit through `training_mode` metadata.
-
-Optional Gemini rendering for the response layer:
-
-```env
-AI_CORE_DEMO_RESPONSE_PROVIDER=gemini
-GEMINI_API_KEY=your_key_here
-GEMINI_TEXT_MODEL=gemini-2.5-flash
-```
-
-Gemini is used only to render:
-- `empathetic_response`
-- `gentle_suggestion`
-
-Emotion inference still comes from the backend AI core. If Gemini is missing or fails, the demo path falls back to the built-in template renderer.
-In English-first mode, Gemini is the preferred renderer for normal low-risk demo requests.
-
-## Vietnamese Localization Demo
-
-Vietnamese is still supported as a secondary demo/localization layer.
-
-Run the Vietnamese preset:
-
-```bash
-cp .env.demo.vi.example .env
-alembic upgrade head
-uvicorn app.main:app --reload
-```
-
-Run the curated Vietnamese demo cases:
-
-```bash
-PYTHONPATH=backend python backend/scripts/demo_vi_ai_core.py
-```
-
-The script writes:
-- `backend/reports/vi_ai_core_demo.md`
-
-Notes:
-- `/v1/demo/ai-core` is now English-first, but Vietnamese input is still routed to the VI demo service for compatibility.
-- Chinese is currently not part of the active product direction.
-- Safety handling remains conservative across English and Vietnamese paths.
-- This is a supportive wellness product, not diagnosis or therapy.
+When changing the backend:
+- preserve the canonical 7-label frontend emotion contract
+- do not let Gemini classify emotion
+- keep deterministic logic outside Gemini
+- prefer additive changes over broad redesigns
+- reuse persisted snapshots before considering historical reprocessing

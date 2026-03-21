@@ -35,6 +35,73 @@ def test_upload_checkin(client) -> None:
     assert entry_id
 
 
+def test_upload_checkin_returns_voice_source_type(client) -> None:
+    response = client.post(
+        "/v1/checkins/upload",
+        data={"user_id": "voice-user", "session_type": "free"},
+        files={"file": ("checkin.wav", BytesIO(b"fake-audio"), "audio/wav")},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["source_type"] == "voice"
+
+
+def test_text_checkin_processes_end_to_end(client) -> None:
+    response = client.post(
+        "/v1/checkins/text",
+        json={
+            "user_id": "text-user",
+            "session_type": "free",
+            "text": "  I feel stressed   because work deadlines are piling up.  ",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "processed"
+    assert payload["user_id"] == "text-user"
+    assert payload["source_type"] == "text"
+    assert payload["audio_path"] is None
+    assert payload["transcript_text"] == "I feel stressed because work deadlines are piling up."
+    assert payload["transcript_source"] == "user_text"
+    assert payload["transcript_provider"] == "text_input"
+    assert payload["ai_analysis_complete"] is True
+    assert payload["latest_attempt_status"] == "succeeded"
+    assert payload["processing_started_at"] is not None
+    assert payload["processing_finished_at"] is not None
+    assert payload["primary_label"]
+    assert payload["response_metadata"]["response_plan"]["response_variant"]
+    assert payload["response_metadata"]["source_type"] == "text"
+    assert payload["response_metadata"]["transcript_source"] == "user_text"
+    assert payload["ai"]["memory"]["recent_checkin_count"] == 0
+
+
+def test_text_checkin_uses_recent_memory_context(client) -> None:
+    first_response = client.post(
+        "/v1/checkins/text",
+        json={
+            "user_id": "text-memory-user",
+            "session_type": "free",
+            "text": "I feel overwhelmed because the work keeps piling up.",
+        },
+    )
+    assert first_response.status_code == 201
+
+    second_response = client.post(
+        "/v1/checkins/text",
+        json={
+            "user_id": "text-memory-user",
+            "session_type": "free",
+            "text": "Today still feels heavy and pressured.",
+        },
+    )
+
+    assert second_response.status_code == 201
+    payload = second_response.json()
+    assert payload["ai"]["memory"]["recent_checkin_count"] >= 1
+    assert payload["response_metadata"]["memory_summary"]["recent_checkin_count"] >= 1
+
+
 def test_process_checkin_with_override_transcript(client) -> None:
     entry_id = _upload_checkin(client)
 
@@ -47,8 +114,40 @@ def test_process_checkin_with_override_transcript(client) -> None:
     payload = response.json()
     assert payload["entry_id"] == entry_id
     assert payload["status"] == "processed"
+    assert payload["source_type"] == "voice"
+    assert payload["transcript_source"] == "override"
+    assert payload["transcript_provider"] == "override"
+    assert payload["ai_analysis_complete"] is True
+    assert payload["latest_attempt_status"] == "succeeded"
     assert payload["risk_level"] == "low"
-    assert "công việc/học tập" in payload["topic_tags"]
+    assert "work/school" in payload["topic_tags"]
+
+
+def test_voice_checkin_processes_via_stt_then_text_pipeline(client, monkeypatch) -> None:
+    entry_id = _upload_checkin(client, user_id="voice-pipeline-user")
+    import app.services.checkin_processing_service as processing_service_module
+
+    monkeypatch.setattr(
+        processing_service_module,
+        "transcribe_audio",
+        lambda _audio_path: ("  I feel overwhelmed because deadlines are piling up.  ", 0.91),
+    )
+
+    response = client.post(f"/v1/checkins/{entry_id}/process", json={})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "processed"
+    assert payload["source_type"] == "voice"
+    assert payload["transcript_text"] == "I feel overwhelmed because deadlines are piling up."
+    assert payload["transcript_confidence"] == 0.91
+    assert payload["transcript_source"] == "stt"
+    assert payload["transcript_provider"] in {"mock", "openai"}
+    assert payload["ai_analysis_complete"] is True
+    assert payload["latest_attempt_status"] == "succeeded"
+    assert payload["response_metadata"]["normalized_text"] == "I feel overwhelmed because deadlines are piling up."
+    assert payload["response_metadata"]["source_type"] == "voice"
+    assert payload["response_metadata"]["transcript_source"] == "stt"
 
 
 def test_high_risk_transcript_uses_safe_message(client) -> None:
@@ -104,6 +203,42 @@ def test_summary_endpoint(client) -> None:
     assert payload["total_entries"] == 2
     assert isinstance(payload["emotion_counts"], dict)
     assert isinstance(payload["risk_counts"], dict)
+    assert "dominant_emotional_patterns" in payload
+    assert "recurring_triggers" in payload
+    assert "workload_deadline_patterns" in payload
+    assert "positive_anchors" in payload
+    assert "emotional_direction_trend" in payload
+    assert "high_stress_frequency" in payload
+    assert payload["summary_text"]
+
+
+def test_summary_endpoint_detects_workload_patterns_and_positive_anchors(client) -> None:
+    first_entry_id = _upload_checkin(client, user_id="summary-pattern-user")
+    second_entry_id = _upload_checkin(client, user_id="summary-pattern-user")
+    third_entry_id = _upload_checkin(client, user_id="summary-pattern-user")
+
+    client.post(
+        f"/v1/checkins/{first_entry_id}/process",
+        json={"override_transcript": "I feel stressed because work deadlines keep piling up."},
+    )
+    client.post(
+        f"/v1/checkins/{second_entry_id}/process",
+        json={"override_transcript": "I still feel overwhelmed by deadlines and pressure at work."},
+    )
+    client.post(
+        f"/v1/checkins/{third_entry_id}/process",
+        json={"override_transcript": "Today I feel lighter and grateful because things are improving."},
+    )
+
+    response = client.get("/v1/users/summary-pattern-user/summary?days=30")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "deadline_pressure" in payload["recurring_triggers"]
+    assert "deadline_pressure" in payload["workload_deadline_patterns"]
+    assert payload["positive_anchors"]
+    assert payload["high_stress_frequency"] > 0.0
+    assert payload["summary_text"]
 
 
 def test_user_entries_history_endpoint(client) -> None:
@@ -125,8 +260,16 @@ def test_user_entries_history_endpoint(client) -> None:
     payload = response.json()
     assert payload["user_id"] == "history-user"
     assert payload["total"] == 2
+    assert payload["items"][0]["id"] == second_entry_id
     assert payload["items"][0]["entry_id"] == second_entry_id
-    assert payload["items"][1]["entry_id"] == first_entry_id
+    assert payload["items"][0]["source_type"] == "voice"
+    assert payload["items"][0]["transcript_excerpt"]
+    assert payload["items"][0]["primary_label"]
+    assert isinstance(payload["items"][0]["secondary_labels"], list)
+    assert payload["items"][0]["ai_response_excerpt"]
+    assert "transcript_text" not in payload["items"][0]
+    assert "ai_response" not in payload["items"][0]
+    assert payload["items"][1]["id"] == first_entry_id
 
 
 def test_user_entries_pagination_and_filters(client) -> None:
@@ -153,7 +296,7 @@ def test_user_entries_pagination_and_filters(client) -> None:
     assert payload["total"] == 1
     assert payload["limit"] == 1
     assert len(payload["items"]) == 1
-    assert payload["items"][0]["entry_id"] == free_entry_id
+    assert payload["items"][0]["id"] == free_entry_id
 
     offset_response = client.get(
         "/v1/users/history-filter-user/entries",
@@ -161,7 +304,7 @@ def test_user_entries_pagination_and_filters(client) -> None:
     )
     assert offset_response.status_code == 200
     assert len(offset_response.json()["items"]) == 1
-    assert offset_response.json()["items"][0]["entry_id"] == free_entry_id
+    assert offset_response.json()["items"][0]["id"] == free_entry_id
     assert morning_entry_id
 
 
@@ -221,6 +364,53 @@ def test_attempts_log_created_for_successful_processing(client) -> None:
     assert payload["total"] == 1
     assert payload["items"][0]["status"] == "succeeded"
     assert payload["items"][0]["trigger_type"] == "manual"
+
+
+def test_duplicate_process_call_returns_existing_entry_without_new_attempt(client) -> None:
+    entry_id = _upload_checkin(client, user_id="duplicate-user")
+
+    first_response = client.post(
+        f"/v1/checkins/{entry_id}/process",
+        json={"override_transcript": "I feel overwhelmed because deadlines are piling up."},
+    )
+    assert first_response.status_code == 200
+
+    second_response = client.post(f"/v1/checkins/{entry_id}/process", json={})
+    attempts_response = client.get(f"/v1/checkins/{entry_id}/attempts")
+
+    assert second_response.status_code == 200
+    second_payload = second_response.json()
+    assert second_payload["entry_id"] == entry_id
+    assert second_payload["status"] == "processed"
+    assert second_payload["latest_attempt_status"] == "succeeded"
+    assert attempts_response.status_code == 200
+    assert attempts_response.json()["total"] == 1
+
+
+def test_failed_processing_leaves_entry_in_coherent_state(client, monkeypatch) -> None:
+    import app.services.checkin_processing_service as processing_service_module
+
+    entry_id = _upload_checkin(client, user_id="failure-coherence-user")
+    monkeypatch.setattr(
+        processing_service_module,
+        "transcribe_audio",
+        lambda _audio_path: (_ for _ in ()).throw(ProviderExecutionError("pipeline failure for testing")),
+    )
+
+    process_response = client.post(f"/v1/checkins/{entry_id}/process", json={})
+    detail_response = client.get(f"/v1/checkins/{entry_id}")
+
+    assert process_response.status_code == 502
+    assert detail_response.status_code == 200
+    payload = detail_response.json()
+    assert payload["status"] == "failed"
+    assert payload["ai_analysis_complete"] is False
+    assert payload["latest_attempt_status"] == "failed"
+    assert payload["processing_started_at"] is not None
+    assert payload["processing_finished_at"] is not None
+    assert payload["primary_label"] is None
+    assert payload["response_metadata"] is None
+    assert payload["ai_response"] is None
 
 
 def test_attempts_log_created_for_failed_processing(client, monkeypatch) -> None:
@@ -333,3 +523,46 @@ def test_invalid_state_transitions_return_conflict(client) -> None:
 
     assert reprocess_uploaded.status_code == 409
     assert async_processed.status_code == 409
+
+
+def test_recent_history_endpoint_returns_lightweight_canonical_entries(client) -> None:
+    text_response = client.post(
+        "/v1/checkins/text",
+        json={
+            "user_id": "history-canonical-user",
+            "session_type": "free",
+            "text": "I feel lighter today because work pressure eased a bit.",
+        },
+    )
+    assert text_response.status_code == 201
+    voice_entry_id = _upload_checkin(client, user_id="history-canonical-user")
+    voice_response = client.post(
+        f"/v1/checkins/{voice_entry_id}/process",
+        json={"override_transcript": "I still feel pressure because deadlines keep piling up."},
+    )
+    assert voice_response.status_code == 200
+
+    history_response = client.get("/v1/users/history-canonical-user/entries?limit=5")
+
+    assert history_response.status_code == 200
+    payload = history_response.json()
+    assert payload["total"] == 2
+    assert len(payload["items"]) == 2
+    for item in payload["items"]:
+        assert set(item.keys()) == {
+            "id",
+            "entry_id",
+            "status",
+            "session_type",
+            "source_type",
+            "transcript_excerpt",
+            "ai_response_excerpt",
+            "primary_label",
+            "secondary_labels",
+            "stress_score",
+            "created_at",
+            "updated_at",
+        }
+        assert item["source_type"] in {"text", "voice"}
+        assert item["primary_label"] in {"anger", "disgust", "fear", "joy", "sadness", "surprise", "neutral"}
+        assert isinstance(item["secondary_labels"], list)

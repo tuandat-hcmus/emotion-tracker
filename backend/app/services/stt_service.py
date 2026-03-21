@@ -1,8 +1,11 @@
+import logging
 from pathlib import Path
 from typing import Protocol
 
 from app.core.config import get_settings
 from app.services.provider_errors import ProviderConfigurationError, ProviderExecutionError
+
+logger = logging.getLogger(__name__)
 
 
 class SpeechToTextProvider(Protocol):
@@ -76,4 +79,18 @@ def get_stt_provider_name(override_transcript: str | None = None) -> str:
 
 def transcribe_audio(audio_path: str) -> tuple[str, float]:
     provider = get_stt_provider()
-    return provider.transcribe(audio_path)
+    provider_name = get_stt_provider_name()
+    logger.info(
+        "stt.transcribe_start provider=%s audio_file=%s",
+        provider_name,
+        Path(audio_path).name,
+    )
+    transcript, confidence = provider.transcribe(audio_path)
+    logger.info(
+        "stt.transcribe_complete provider=%s audio_file=%s transcript_chars=%s confidence=%s",
+        provider_name,
+        Path(audio_path).name,
+        len(transcript),
+        confidence,
+    )
+    return transcript, confidence

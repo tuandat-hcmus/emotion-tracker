@@ -29,6 +29,18 @@ def build_response_plan(
             "tone": "supportive_safe",
             "max_sentences": 2,
         }
+    if response_mode == "stress_supportive":
+        suggestion_allowed = stress_score < 0.72 and "uncertainty_hedging" not in dominant_signals
+        return {
+            "opening_style": "pressure_acknowledgment",
+            "acknowledgment_focus": "deadline_overload",
+            "suggestion_allowed": suggestion_allowed,
+            "suggestion_style": "small_grounding" if suggestion_allowed else "none",
+            "quote_allowed": False,
+            "avoid_advice": False,
+            "tone": "steady_grounding",
+            "max_sentences": 3,
+        }
     if risk_level == "medium" or response_mode == "grounding_soft":
         return {
             "opening_style": "grounding",
@@ -46,7 +58,7 @@ def build_response_plan(
             "acknowledgment_focus": "earned_progress" if "pride_growth" in dominant_signals else "what_is_working",
             "suggestion_allowed": False,
             "suggestion_style": "none",
-            "quote_allowed": confidence >= 0.45 and "uncertainty_hedging" not in dominant_signals,
+            "quote_allowed": confidence >= 0.35 and "uncertainty_hedging" not in dominant_signals,
             "avoid_advice": True,
             "tone": "warm_light",
             "max_sentences": 2,
