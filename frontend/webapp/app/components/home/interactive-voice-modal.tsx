@@ -109,7 +109,7 @@ export function InteractiveVoiceModal({
   const [promptIndex, setPromptIndex] = useState(0)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
-  const [transcript, setTranscript] = useState(transcriptPlaceholders[0])
+  const [transcript, setTranscript] = useState<string>(transcriptPlaceholders[0])
   const [result, setResult] = useState<ConversationTurnResult | null>(null)
   const [connectionError, setConnectionError] = useState<string | null>(null)
 

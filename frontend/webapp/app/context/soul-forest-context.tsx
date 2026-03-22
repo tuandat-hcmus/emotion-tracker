@@ -176,6 +176,8 @@ export function SoulForestProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    const accessToken = token
+    const currentUser = user
     let cancelled = false
 
     async function loadHome() {
@@ -184,8 +186,8 @@ export function SoulForestProvider({ children }: { children: ReactNode }) {
 
       try {
         const [homeResponse, historyResponse] = await Promise.all([
-          api.getHome(token),
-          api.getHistory(token, user.id, 12, 0),
+          api.getHome(accessToken),
+          api.getHistory(accessToken, currentUser.id, 12, 0),
         ])
 
         if (cancelled) {
@@ -266,13 +268,15 @@ export function SoulForestProvider({ children }: { children: ReactNode }) {
           return
         }
 
+        const accessToken = token
+        const currentUser = user
         setHomeStatus("loading")
         setHomeError(null)
 
         try {
           const [homeResponse, historyResponse] = await Promise.all([
-            api.getHome(token),
-            api.getHistory(token, user.id, 12, 0),
+            api.getHome(accessToken),
+            api.getHistory(accessToken, currentUser.id, 12, 0),
           ])
 
           const mappedTimeline =
