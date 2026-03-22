@@ -1,326 +1,547 @@
-import { motion } from "framer-motion"
-import { useState } from "react"
-
-import { MicIcon } from "~/components/icons/mic-icon"
-import SoulTree, { type EmotionState } from "~/components/home/soul-tree"
-import { VoiceInputModal } from "~/components/home/voice-input-modal"
-import { Button } from "~/components/ui/button"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card"
+  Activity01Icon,
+  FavouriteIcon,
+  Leaf02Icon,
+  Moon02Icon,
+  QuoteUpIcon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { motion } from "framer-motion"
+import { Link } from "react-router"
+
+import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
+import { Card, CardContent } from "~/components/ui/card"
 import { useSoulForest } from "~/context/soul-forest-context"
+import {
+  EMOTION_META,
+  formatEmotionLabel,
+  SOUL_EMOTIONS,
+  type SoulEmotion,
+} from "~/lib/emotions"
 
-const weeklySignals = [
-  { label: "Calm", count: 9, color: "bg-[#81B29A]" },
-  { label: "Reflective", count: 6, color: "bg-[#A8C3D8]" },
-  { label: "Stressed", count: 3, color: "bg-[#E07A5F]" },
-  { label: "Hopeful", count: 5, color: "bg-[#7E9F8B]" },
-]
+const quickActions = [
+  {
+    label: "Breathe",
+    detail: "Two slow rounds",
+    icon: Leaf02Icon,
+  },
+  {
+    label: "Quote",
+    detail: "Grounding line",
+    icon: QuoteUpIcon,
+  },
+  {
+    label: "Evening",
+    detail: "Soft reset",
+    icon: Moon02Icon,
+  },
+] as const
 
-export default function DashboardHome() {
-  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false)
-  const { currentMood, intensity, timeline, lastQuote } = useSoulForest()
-  const [treePreviewEmotion, setTreePreviewEmotion] =
-    useState<EmotionState | null>(null)
+function MoodBadge({
+  color,
+  label,
+}: {
+  color: string
+  label: string
+}) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-white/45 px-3 py-1.5 text-xs font-medium text-[#2F3E36]">
+      <span
+        className="h-2.5 w-2.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      {label}
+    </span>
+  )
+}
 
-  const liveTreeEmotion: EmotionState =
-    currentMood === "Calm"
-      ? "calm"
-      : currentMood === "Reflective"
-        ? "reflective"
-        : currentMood === "Hopeful"
-          ? "hopeful"
-          : "stressed"
+function QuickActionChip({
+  detail,
+  icon,
+  label,
+}: {
+  detail: string
+  icon: typeof Leaf02Icon
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      className="flex min-w-[8.5rem] flex-1 items-center gap-3 rounded-full border border-white/50 bg-white/35 px-4 py-3 text-left shadow-sm backdrop-blur-md transition-colors hover:bg-white/55"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7E9F8B]/14 text-[#7E9F8B]">
+        <HugeiconsIcon icon={icon} size={18} strokeWidth={1.8} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-[#2F3E36]">{label}</span>
+        <span className="block text-xs text-[#2F3E36]/58">{detail}</span>
+      </span>
+    </button>
+  )
+}
 
-  const activeTreeEmotion = treePreviewEmotion ?? liveTreeEmotion
-
-  const treePresets: Array<{ label: string; emotion: EmotionState }> = [
-    { label: "Calm", emotion: "calm" },
-    { label: "Reflective", emotion: "reflective" },
-    { label: "Stressed", emotion: "stressed" },
-    { label: "Hopeful", emotion: "hopeful" },
-  ]
+function EmotionTestButton({
+  active,
+  emotion,
+  onClick,
+}: {
+  active: boolean
+  emotion: SoulEmotion
+  onClick: () => void
+}) {
+  const metadata = EMOTION_META[emotion]
 
   return (
-    <>
-      <motion.section
-        initial={{ opacity: 0, y: 22 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.55, ease: "easeOut" }}
-        className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)]"
-      >
-        <div className="space-y-6">
+    <motion.button
+      type="button"
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className={`rounded-full border px-4 py-2 text-sm transition-all ${
+        active
+          ? "border-transparent bg-[#2F3E36] text-white shadow-[0_12px_24px_rgba(47,62,54,0.12)]"
+          : "border-white/50 bg-white/36 text-[#2F3E36] hover:bg-white/56"
+      }`}
+    >
+      <span className="inline-flex items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 rounded-full"
+          style={{ backgroundColor: metadata.color }}
+        />
+        {metadata.label}
+      </span>
+    </motion.button>
+  )
+}
+
+function TimelineDotRow({
+  activeMood,
+  entries,
+}: {
+  activeMood: string
+  entries: Array<{
+    id: string
+    mood: string
+    moodColor: string
+    time: string
+  }>
+}) {
+  return (
+    <div className="flex items-center gap-3 overflow-x-auto pb-1">
+      {entries.map((entry) => {
+        const isActive = entry.mood === activeMood
+
+        return (
+          <div key={entry.id} className="flex shrink-0 flex-col items-center gap-2">
+            <motion.div
+              animate={
+                isActive
+                  ? {
+                      boxShadow: [
+                        `0 0 0 0 ${entry.moodColor}40`,
+                        `0 0 0 10px ${entry.moodColor}00`,
+                        `0 0 0 0 ${entry.moodColor}00`,
+                      ],
+                      scale: [1, 1.06, 1],
+                    }
+                  : { scale: 1 }
+              }
+              transition={{
+                duration: 2.4,
+                repeat: isActive ? Infinity : 0,
+                ease: "easeInOut",
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/60 bg-white/40"
+            >
+              <span
+                className="h-4 w-4 rounded-full"
+                style={{ backgroundColor: entry.moodColor }}
+              />
+            </motion.div>
+            <span className="text-[0.7rem] text-[#2F3E36]/58">{entry.time}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function DesktopStat({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-[1.75rem] border border-white/45 bg-white/28 p-4">
+      <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+        {label}
+      </p>
+      <p className="mt-3 text-2xl font-semibold text-[#2F3E36]">{value}</p>
+    </div>
+  )
+}
+
+export default function DashboardHome() {
+  const { currentMood, lastQuote, setEmotion, timeline, treeScore } =
+    useSoulForest()
+  const todayTimeline = timeline.slice(0, 5)
+  const latestEntry = timeline[0]
+
+  return (
+    <div className="min-h-[calc(100svh-7rem)] md:min-h-full">
+      <section className="relative flex min-h-[calc(100svh-7rem)] flex-col overflow-hidden md:hidden">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute left-[-4rem] top-12 h-40 w-40 rounded-full bg-[#A8C3D8]/25 blur-3xl" />
+          <div className="absolute right-[-3rem] top-28 h-44 w-44 rounded-full bg-[#7E9F8B]/18 blur-3xl" />
+        </div>
+
+        <div className="relative h-[68svh] min-h-[29rem]">
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05, duration: 0.5 }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
+            className="absolute inset-x-0 top-4 z-10 px-4"
           >
-            <Card className="overflow-hidden border-white/50 bg-gradient-to-br from-[#A8C3D8]/28 via-white/22 to-[#7E9F8B]/20">
-              <CardHeader className="pb-3">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-[#7E9F8B]">
-                      Today&apos;s grove
-                    </p>
-                    <CardTitle className="mt-2 text-2xl sm:text-3xl">
-                      Your inner weather has a place to land.
-                    </CardTitle>
-                    <CardDescription className="mt-2 max-w-xl text-sm leading-6">
-                      Record a reflection and watch the tree respond without
-                      needing to scroll before you even see it.
-                    </CardDescription>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3">
-                    <motion.div whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }}>
-                      <Button
-                        onClick={() => setIsVoiceModalOpen(true)}
-                        size="lg"
-                        className="h-11 rounded-full border-0 bg-[#7E9F8B] px-5 text-white hover:bg-[#5C7D69]"
-                      >
-                        <MicIcon className="mr-2 h-4 w-4" />
-                        Voice input now
-                      </Button>
-                    </motion.div>
-                    <motion.div
-                      animate={{ y: [0, -2, 0] }}
-                      transition={{
-                        duration: 5,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                      }}
-                      className="rounded-full bg-white/35 px-4 py-3 text-sm text-[#2F3E36]/76"
-                    >
-                      Current mood: {currentMood}
-                    </motion.div>
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent className="pb-5">
-                <div className="rounded-[2rem] border border-white/40 bg-[radial-gradient(circle_at_top,rgba(168,195,216,0.28),rgba(255,255,255,0.12),rgba(126,159,139,0.22))] p-4 sm:p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-[#7E9F8B]">
-                        Soul Tree stage
-                      </p>
-                      <h3 className="mt-2 text-lg font-semibold sm:text-xl">
-                        Your forest is reflecting today&apos;s emotional tone
-                      </h3>
-                      <p className="mt-2 text-sm leading-6 text-[#2F3E36]/72">
-                        Switch states below or sync to the live detected mood.
-                      </p>
-                    </div>
-                    <div className="rounded-full bg-white/35 px-4 py-2 text-sm text-[#2F3E36]/72">
-                      {treePreviewEmotion ? "Manual preview" : "Synced to mood"}
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {treePresets.map((preset) => (
-                      <button
-                        key={preset.emotion}
-                        type="button"
-                        onClick={() => setTreePreviewEmotion(preset.emotion)}
-                        className={`rounded-full px-4 py-2 text-sm transition-colors ${
-                          activeTreeEmotion === preset.emotion
-                            ? "bg-[#7E9F8B] text-white"
-                            : "bg-white/35 text-[#2F3E36] hover:bg-white/55"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setTreePreviewEmotion(null)}
-                      className={`rounded-full px-4 py-2 text-sm transition-colors ${
-                        treePreviewEmotion === null
-                          ? "bg-[#2F3E36] text-white"
-                          : "bg-white/35 text-[#2F3E36] hover:bg-white/55"
-                      }`}
-                    >
-                      Sync with mood
-                    </button>
-                  </div>
-
-                  <div className="mt-4 overflow-hidden rounded-[1.75rem] border border-white/35 bg-white/[0.18]">
-                    <SoulTree
-                      emotion={activeTreeEmotion}
-                      className="h-[17.5rem] border-0 bg-transparent shadow-none sm:h-[18.5rem]"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center justify-between gap-3">
+              <div className="rounded-full border border-white/50 bg-white/36 px-4 py-2 text-[0.68rem] uppercase tracking-[0.28em] text-[#7E9F8B] shadow-sm backdrop-blur-md">
+                Soul Forest
+              </div>
+              <MoodBadge
+                color={latestEntry?.moodColor ?? "#7E9F8B"}
+                label={formatEmotionLabel(currentMood)}
+              />
+            </div>
           </motion.div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.08, duration: 0.6, ease: "easeOut" }}
+            className="absolute inset-0 pt-10"
+          >
+            <DeferredSoulTree
+              emotion={currentMood}
+              score={treeScore}
+              deferMs={120}
+              className="h-full scale-[1.12] rounded-none border-0 bg-transparent shadow-none"
+            />
+          </motion.div>
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#FDFBF7] via-[#FDFBF7]/35 to-transparent" />
+        </div>
+
+        <Card className="-mt-12 flex min-h-0 flex-1 flex-col rounded-t-[2rem] border-b-0 bg-white/40 pb-24 shadow-[0_-16px_40px_rgba(47,62,54,0.08)]">
+          <div className="flex justify-center pt-3">
+            <span className="h-1.5 w-14 rounded-full bg-[#2F3E36]/12" />
+          </div>
+
+          <CardContent className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pb-6 pt-4">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08, duration: 0.45 }}
+              className="rounded-[1.75rem] border border-white/45 bg-gradient-to-r from-[#A8C3D8]/24 to-[#7E9F8B]/16 p-4"
+            >
+              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+                Today&apos;s canopy
+              </p>
+              <p className="mt-2 text-base font-semibold text-[#2F3E36]">
+                A {formatEmotionLabel(currentMood).toLowerCase()} rhythm is
+                moving through the tree.
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#2F3E36]/72">
+                Let the tree breathe in full view, then tap the center mic when
+                you want to add a new voice memory.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.45 }}
+              className="space-y-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+                    Test tree states
+                  </p>
+                  <h2 className="mt-1 text-lg font-semibold text-[#2F3E36]">
+                    Drop a gem to preview emotions
+                  </h2>
+                </div>
+                <span className="rounded-full bg-white/45 px-3 py-1.5 text-xs text-[#2F3E36]/68">
+                  7 states
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {SOUL_EMOTIONS.map((emotion) => (
+                  <EmotionTestButton
+                    key={emotion}
+                    active={emotion === currentMood}
+                    emotion={emotion}
+                    onClick={() => setEmotion(emotion)}
+                  />
+                ))}
+              </div>
+            </motion.div>
+
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12, duration: 0.45 }}
+              className="space-y-3"
             >
-              <Card className="bg-white/[0.28]">
-                <CardHeader className="pb-2">
-                  <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-                    Emotional balance
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+                    Daily mood timeline
                   </p>
-                  <CardTitle className="text-2xl">{intensity}%</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-6 text-[#2F3E36]/72">
-                    Your latest reflection carries a{" "}
-                    {currentMood.toLowerCase()} tone with moderate intensity.
-                  </p>
-                </CardContent>
-              </Card>
+                  <h2 className="mt-1 text-lg font-semibold text-[#2F3E36]">
+                    Gentle shifts across today
+                  </h2>
+                </div>
+                <span className="rounded-full bg-white/45 px-3 py-1.5 text-xs text-[#2F3E36]/68">
+                  {todayTimeline.length} moments
+                </span>
+              </div>
+
+              <TimelineDotRow activeMood={currentMood} entries={todayTimeline} />
             </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.18, duration: 0.45 }}
+              className="space-y-3"
             >
-              <Card className="bg-white/[0.28]">
-                <CardHeader className="pb-2">
-                  <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-                    Weekly seeds
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+                    Quick actions
                   </p>
-                  <CardTitle className="text-2xl">{timeline.length + 8}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-6 text-[#2F3E36]/72">
-                    Voice moments already planted across your recent emotional
-                    timeline.
-                  </p>
-                </CardContent>
-              </Card>
+                  <h2 className="mt-1 text-lg font-semibold text-[#2F3E36]">
+                    Small rituals for right now
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {quickActions.map((action) => (
+                  <QuickActionChip
+                    key={action.label}
+                    detail={action.detail}
+                    icon={action.icon}
+                    label={action.label}
+                  />
+                ))}
+              </div>
             </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.24, duration: 0.45 }}
+              className="rounded-[1.75rem] border border-white/45 bg-gradient-to-r from-[#A8C3D8]/28 to-[#7E9F8B]/22 p-4"
             >
-              <Card className="bg-white/[0.28]">
-                <CardHeader className="pb-2">
-                  <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-                    Grounding note
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/45 text-[#7E9F8B]">
+                  <HugeiconsIcon icon={Activity01Icon} size={18} strokeWidth={1.8} />
+                </span>
+                <div>
+                  <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+                    Forest pulse
                   </p>
-                  <CardTitle className="text-2xl">Keep blooming</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-6 text-[#2F3E36]/72">
+                  <p className="mt-2 text-base font-semibold text-[#2F3E36]">
+                    Growth is holding at {Math.round(treeScore)}/100.
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#2F3E36]/72">
                     {lastQuote}
                   </p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </motion.div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="hidden h-full md:flex md:flex-col md:gap-5 md:p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
+          className="rounded-[2rem] border border-white/45 bg-gradient-to-br from-[#A8C3D8]/30 via-white/28 to-[#7E9F8B]/18 p-5"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[0.68rem] uppercase tracking-[0.28em] text-[#7E9F8B]">
+                Daily companion
+              </p>
+              <h1 className="mt-2 text-3xl leading-tight font-semibold text-[#2F3E36]">
+                Your forest is ready to listen.
+              </h1>
+            </div>
+            <MoodBadge
+              color={latestEntry?.moodColor ?? "#7E9F8B"}
+              label={formatEmotionLabel(currentMood)}
+            />
           </div>
-        </div>
 
-        <div className="space-y-6 xl:sticky xl:top-0 xl:self-start">
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.14, duration: 0.5 }}
-          >
-            <Card className="bg-white/[0.28]">
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-                  Daily mood timeline
-                </p>
-                <CardTitle className="text-2xl">Recent canopy shifts</CardTitle>
-                <CardDescription>
-                  A soft read on the emotional rhythm across your latest
-                  entries.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {timeline.map((entry, index) => (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.18 + index * 0.04, duration: 0.34 }}
-                    className="rounded-[1.5rem] border border-white/35 bg-white/[0.24] p-4"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="mt-1 h-3.5 w-3.5 rounded-full"
-                          style={{ backgroundColor: entry.moodColor }}
-                        />
-                        <div>
-                          <p className="text-sm font-medium text-[#2F3E36]">
-                            {entry.day} - {entry.time}
-                          </p>
-                          <p className="mt-1 text-sm leading-6 text-[#2F3E36]/72">
-                            {entry.summary}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="rounded-full bg-white/40 px-3 py-1 text-xs">
-                        {entry.mood}
-                      </span>
-                    </div>
-                    <p className="mt-4 text-sm italic text-[#2F3E36]/62">
-                      {entry.quote}
-                    </p>
-                  </motion.div>
-                ))}
-              </CardContent>
-            </Card>
-          </motion.div>
+          <p className="mt-4 text-sm leading-7 text-[#2F3E36]/72">
+            The canopy behind this panel stays live with your emotional state.
+            Use the mic in the sidebar to begin a new voice ritual, or visit
+            your journal to revisit what has already taken root.
+          </p>
 
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.22, duration: 0.5 }}
-          >
-            <Card className="bg-gradient-to-br from-[#A8C3D8]/22 to-[#7E9F8B]/18">
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-                  Mood weather
-                </p>
-                <CardTitle className="text-2xl">This week in colors</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {weeklySignals.map((signal, index) => (
-                  <div key={signal.label} className="space-y-2">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span>{signal.label}</span>
-                      <span>{signal.count} entries</span>
-                    </div>
-                    <div className="h-3 rounded-full bg-white/35">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${signal.count * 9}%` }}
-                        transition={{
-                          delay: 0.28 + index * 0.06,
-                          duration: 0.8,
-                          ease: "easeOut",
-                        }}
-                        className={`h-3 rounded-full ${signal.color}`}
-                      />
+          <div className="mt-5 flex gap-3">
+            <Link
+              to="/app/journal"
+              className="inline-flex flex-1 items-center justify-center rounded-full bg-[#7E9F8B] px-4 py-3 text-sm font-medium text-white shadow-[0_16px_35px_rgba(126,159,139,0.22)] transition-colors hover:bg-[#6D8D7A]"
+            >
+              Open journal
+            </Link>
+            <div className="inline-flex flex-1 items-center justify-center rounded-full border border-white/50 bg-white/35 px-4 py-3 text-sm text-[#2F3E36]/72">
+              Tap the mic to speak
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.04, duration: 0.45, ease: "easeOut" }}
+          className="rounded-[2rem] border border-white/45 bg-white/28 p-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+                Test tree states
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-[#2F3E36]">
+                Tap a gem and watch it fall into the tree
+              </h2>
+            </div>
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7E9F8B]/14 text-[#7E9F8B]">
+              <HugeiconsIcon icon={FavouriteIcon} size={18} strokeWidth={1.8} />
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {SOUL_EMOTIONS.map((emotion) => (
+              <EmotionTestButton
+                key={emotion}
+                active={emotion === currentMood}
+                emotion={emotion}
+                onClick={() => setEmotion(emotion)}
+              />
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06, duration: 0.45, ease: "easeOut" }}
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          <DesktopStat label="Tree growth" value={`${Math.round(treeScore)}/100`} />
+          <DesktopStat label="Entries this week" value={`${timeline.length + 8}`} />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, duration: 0.45, ease: "easeOut" }}
+          className="space-y-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+                Main actions
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-[#2F3E36]">
+                Care rituals for this moment
+              </h2>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {quickActions.map((action) => (
+              <QuickActionChip
+                key={action.label}
+                detail={action.detail}
+                icon={action.icon}
+                label={action.label}
+              />
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18, duration: 0.45, ease: "easeOut" }}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border border-white/45 bg-white/28"
+        >
+          <div className="border-b border-white/45 px-5 py-4">
+            <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+              Daily timeline
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-[#2F3E36]">
+              Recent canopy shifts
+            </h2>
+          </div>
+
+          <div className="min-h-0 space-y-3 overflow-y-auto px-5 py-4">
+            {timeline.map((entry, index) => (
+              <motion.div
+                key={entry.id}
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.22 + index * 0.04, duration: 0.3 }}
+                className="rounded-[1.5rem] border border-white/45 bg-white/32 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 gap-3">
+                    <span
+                      className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: entry.moodColor }}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[#2F3E36]">
+                        {entry.day} at {entry.time}
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-[#2F3E36]/70">
+                        {entry.summary}
+                      </p>
                     </div>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      </motion.section>
+                  <MoodBadge
+                    color={entry.moodColor}
+                    label={formatEmotionLabel(entry.mood)}
+                  />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
 
-      <VoiceInputModal
-        open={isVoiceModalOpen}
-        onOpenChange={setIsVoiceModalOpen}
-      />
-    </>
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.24, duration: 0.45, ease: "easeOut" }}
+          className="rounded-[2rem] border border-white/45 bg-gradient-to-r from-[#A8C3D8]/24 to-[#7E9F8B]/20 p-5"
+        >
+          <p className="text-[0.68rem] uppercase tracking-[0.24em] text-[#7E9F8B]">
+            Latest grounding
+          </p>
+          <p className="mt-3 text-base leading-7 text-[#2F3E36]/76">
+            {lastQuote}
+          </p>
+        </motion.div>
+      </section>
+    </div>
   )
 }

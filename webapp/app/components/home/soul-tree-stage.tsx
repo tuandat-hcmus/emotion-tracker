@@ -1,6 +1,6 @@
 import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
-import SoulTree from "~/components/home/soul-tree"
+import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
 
 function StaticSoulTreeFallback() {
   return (
@@ -52,9 +52,10 @@ export function SoulTreeStage() {
           <div className="pointer-events-none absolute inset-x-6 top-4 h-14 rounded-full bg-white/25 blur-2xl" />
 
           {isMounted ? (
-            <SoulTree
+            <DeferredSoulTree
               className="h-[18rem] border-0 bg-transparent shadow-none"
-              emotion="calm"
+              deferMs={120}
+              emotion="neutral"
             />
           ) : (
             <StaticSoulTreeFallback />

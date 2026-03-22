@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/dialog"
 import { Slider } from "~/components/ui/slider"
 import { useSoulForest } from "~/context/soul-forest-context"
+import { type SoulEmotion } from "~/lib/emotions"
 
 type VoiceInputModalProps = {
   open: boolean
@@ -54,32 +55,72 @@ export function VoiceInputModal({
       })
 
     const lowered = transcript.toLowerCase()
-    let mood: "Calm" | "Reflective" | "Stressed" | "Hopeful" = "Reflective"
+    let mood: SoulEmotion = "neutral"
 
-    if (lowered.includes("overwhelmed") || lowered.includes("tension")) {
-      mood = "Stressed"
+    if (lowered.includes("overwhelmed")) {
+      mood = "anxiety"
     } else if (
-      lowered.includes("grateful") ||
-      lowered.includes("hope") ||
-      lowered.includes("lighter")
+      lowered.includes("angry") ||
+      lowered.includes("furious") ||
+      lowered.includes("resent")
     ) {
-      mood = "Hopeful"
+      mood = "anger"
+    } else if (
+      lowered.includes("anxious") ||
+      lowered.includes("panic") ||
+      lowered.includes("tension")
+    ) {
+      mood = "anxiety"
+    } else if (
+      lowered.includes("sad") ||
+      lowered.includes("empty") ||
+      lowered.includes("cry")
+    ) {
+      mood = "sadness"
+    } else if (
+      lowered.includes("disgusted") ||
+      lowered.includes("gross") ||
+      lowered.includes("repulsed")
+    ) {
+      mood = "disgust"
+    } else if (
+      lowered.includes("surprised") ||
+      lowered.includes("unexpected") ||
+      lowered.includes("shocked")
+    ) {
+      mood = "surprise"
+    } else if (
+      lowered.includes("joy") ||
+      lowered.includes("lighter") ||
+      lowered.includes("grateful") ||
+      lowered.includes("thankful") ||
+      lowered.includes("appreciate") ||
+      lowered.includes("happy")
+    ) {
+      mood = "joy"
     } else if (
       lowered.includes("breathe") ||
       lowered.includes("calm") ||
-      lowered.includes("soft")
+      lowered.includes("soft") ||
+      lowered.includes("steady")
     ) {
-      mood = "Calm"
+      mood = "neutral"
     }
 
     const quotes = {
-      Calm: "The calm you felt is not an accident. Your body is remembering safety.",
-      Reflective:
-        "Reflection is its own form of care. You are listening more deeply now.",
-      Stressed:
-        "Even when the canopy feels loud, your roots are still learning how to hold you.",
-      Hopeful:
-        "Hope does not need to be loud to be real. A small opening is enough.",
+      joy: "Joy can be quiet and still completely real. Let it spread through the canopy.",
+      surprise:
+        "Surprise can wake the tree up. Let that spark become curiosity instead of noise.",
+      neutral:
+        "Neutral is not empty. It can be a place where your body starts to reset.",
+      sadness:
+        "Sadness softens when it is given somewhere safe to land.",
+      disgust:
+        "Disgust often protects your boundaries. Listening to it can clarify what no longer fits.",
+      anxiety:
+        "Your system is trying to protect you. Slow breaths can help it unclench.",
+      anger:
+        "Anger is often a boundary speaking. Listening to it gently can reveal what matters.",
     }
 
     await mockDelay()
