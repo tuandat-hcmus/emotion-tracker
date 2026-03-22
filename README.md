@@ -1,10 +1,20 @@
 # Emotion Tracker
 
-This repository contains a FastAPI backend and a lightweight frontend shell for an emotional wellness journaling product.
+This repository contains the current Emotion product:
+- `backend/`: FastAPI API, database models, Alembic migrations, tests, and AI/service logic
+- `frontend/webapp/`: React Router + TypeScript frontend
 
-Current product and backend guidelines:
-- English is the default response language unless a supported user language override is clear.
-- The canonical frontend emotion contract uses 7 labels only:
+The product is an emotional wellness journaling app with:
+- text check-ins
+- realtime conversation sessions
+- history and summaries
+- backend-owned emotion analysis and response logic
+
+## Product Rules
+
+- The local Hugging Face model is the source of truth for emotion inference.
+- Gemini is renderer-only.
+- The canonical emotion labels are:
   - `anger`
   - `disgust`
   - `fear`
@@ -12,109 +22,228 @@ Current product and backend guidelines:
   - `sadness`
   - `surprise`
   - `neutral`
-- The local Hugging Face emotion model is the only source of truth for emotion detection.
-- Deterministic backend services handle:
-  - state normalization
-  - safety
-  - response planning
-  - response policy
-- Gemini is renderer-only. It does not classify emotion and must not invent unsupported facts.
-- Check-ins support both:
-  - text input
-  - voice input via `upload -> STT -> shared normalized transcript pipeline`
+- Business logic stays on the backend.
+- The frontend should only render backend-backed fields and remain resilient to additive fields.
 
-Repository layout:
-- `backend/`: FastAPI backend, tests, Alembic migrations, scripts, and backend docs
-- `frontend/`: frontend app or static dashboard shell
+## Repository Layout
 
-## Backend
-
-Run backend commands from the `backend/` folder.
-
-Important backend behavior:
-- text check-ins are persisted and processed end-to-end
-- voice check-ins reuse the same downstream transcript pipeline
-- check-in lifecycle is hardened against duplicate processing calls and partial-write failures
-- history endpoints expose lightweight canonical timeline data
-- wrapups and summaries are generated from persisted journal entries and stored AI snapshots
-
-Docker Compose local dev:
-
-```bash
-docker compose up --build
+```text
+Emotion/
+├─ backend/
+├─ frontend/
+│  └─ webapp/
+├─ docker-compose.yml
+└─ run-dev.bat
 ```
 
-Windows launcher:
+## Local Run Guide
 
-```bat
-run-dev.bat
-```
+You need 2 terminals:
+- one for the backend
+- one for the frontend
 
-Useful Docker commands:
+### 1. Backend setup
 
-```bash
-docker compose exec app alembic upgrade head
-docker compose exec db psql -U emotion_user -d emotion_app
-docker compose down
-docker compose down -v
-```
-
-Example:
+From the repo root:
 
 ```bash
 cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-ai.txt
 cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -r requirements-ai.txt
+Copy-Item .env.example .env
+```
+
+Important:
+- update `backend/.env` if your local database URL is different
+- add both frontend origins to `BACKEND_CORS_ORIGINS`
+
+Recommended value:
+
+```env
+BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
+```
+
+Run migrations:
+
+```bash
+cd backend
+source .venv/bin/activate
 alembic upgrade head
-python -m pytest
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\backend
+.\.venv\Scripts\Activate.ps1
+alembic upgrade head
+```
+
+Start the backend:
+
+```bash
+cd backend
+source .venv/bin/activate
 uvicorn app.main:app --reload
 ```
 
-Main authenticated product flows:
+Windows PowerShell:
 
-```text
-POST /v1/checkins/text
-POST /v1/checkins/upload
-POST /v1/checkins/{entry_id}/process
-GET  /v1/checkins/{entry_id}
-GET  /v1/users/{user_id}/entries
-GET  /v1/users/{user_id}/summary
-GET  /v1/me/wrapups/weekly/latest
-GET  /v1/me/wrapups/monthly/latest
-POST /v1/me/wrapups/regenerate
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\backend
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload
 ```
 
-English-first demo flow:
+Backend default URL:
+
+```text
+http://127.0.0.1:8000
+```
+
+### 2. Frontend setup
+
+The real frontend app is in `frontend/webapp`, not `frontend`.
+
+From the repo root:
 
 ```bash
-cd backend
-cp .env.demo.en.example .env
-alembic upgrade head
-python -m uvicorn app.main:app --reload
+cd frontend/webapp
+npm install
+cp .env.example .env
 ```
 
-Then hit:
+Windows PowerShell:
 
-```text
-POST /v1/demo/ai-core
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\frontend\webapp
+npm install
+Copy-Item .env.example .env
 ```
 
-For detailed backend setup, architecture, contracts, and operational notes, see [backend/README.md](backend/README.md).
+Frontend env:
 
-## Frontend
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
 
-`frontend/` now contains a dependency-free static dashboard shell for the existing backend APIs.
-
-Run it with a local static server from the repo root:
+Start the frontend:
 
 ```bash
-cd frontend
-../.venv/bin/python -m http.server 5173
+cd frontend/webapp
+npm run dev
 ```
 
-Then open:
+Windows PowerShell:
+
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\frontend\webapp
+npm run dev
+```
+
+Frontend default URL:
 
 ```text
-http://127.0.0.1:5173
+http://localhost:5173
 ```
 
-The UI expects the backend to be running, defaulting to `http://127.0.0.1:8000`.
+## Daily Start Commands
+
+If setup is already done:
+
+Backend:
+
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\backend
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload
+```
+
+Frontend:
+
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\frontend\webapp
+npm run dev
+```
+
+## Common Issues
+
+### `npm install` fails in `frontend/`
+
+Use:
+
+```powershell
+cd C:\Users\admin\Desktop\Project\Emotion\frontend\webapp
+```
+
+`frontend/` is not the React app root.
+
+### Login/register requests fail with `OPTIONS ... 400`
+
+That is usually a CORS mismatch. Make sure `backend/.env` includes:
+
+```env
+BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000
+```
+
+Then restart the backend.
+
+### PowerShell blocks venv activation
+
+Run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
+Then:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+## Useful Checks
+
+Backend health:
+
+```bash
+curl http://127.0.0.1:8000/
+```
+
+Targeted backend tests:
+
+```bash
+backend/.venv/bin/pytest backend/tests/test_conversations.py
+```
+
+## Main Frontend/Backend Flows
+
+- auth: register, login, refresh persistence
+- home: dashboard hydration from backend
+- journal: preview + save text check-in
+- history: recent entries and timeline
+- wrapups: weekly and monthly summaries
+- realtime conversation:
+  - create session
+  - connect websocket
+  - send transcript turns
+  - receive assistant response
+  - end session
+
+## More Detail
+
+- backend docs: [backend/README.md](backend/README.md)
+- frontend app: [frontend/webapp/README.md](frontend/webapp/README.md)
