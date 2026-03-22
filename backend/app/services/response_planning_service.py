@@ -10,6 +10,7 @@ def build_response_plan(
     topic_tags: list[str],
     memory_summary: dict[str, object] | None = None,
     recent_trend: dict[str, object] | None = None,
+    session_mode: str | None = None,
 ) -> dict[str, object]:
     plan = _build_response_plan(
         transcript=transcript,
@@ -28,6 +29,13 @@ def build_response_plan(
     )
     if str(emotion_analysis.get("response_mode", "")) == "stress_supportive" and risk_level == "low":
         plan["follow_up_question_allowed"] = True
+    if session_mode == "realtime":
+        plan["max_sentences"] = 1
+        plan["quote_allowed"] = False
+        plan["suggestion_allowed"] = False
+        plan["suggestion_style"] = "none"
+        if risk_level == "low":
+            plan["follow_up_question_allowed"] = True
     plan["response_mode"] = response_mode
     plan["evidence_bound"] = True
     plan["suggestion_family"] = select_suggestion_family(

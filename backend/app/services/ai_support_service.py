@@ -20,6 +20,8 @@ def build_support_package(
     override_topic_tags: list[str] | None = None,
     recent_trend: dict[str, object] | None = None,
     memory_records: list[EmotionalMemoryRecord] | None = None,
+    emotion_analysis_override: dict[str, object] | None = None,
+    session_mode: str | None = None,
 ) -> dict[str, object]:
     safety_result = detect_safety_risk(transcript)
     risk_level = override_risk_level or str(safety_result["risk_level"])
@@ -32,7 +34,7 @@ def build_support_package(
         len(topic_tags),
         len(memory_records or []),
     )
-    emotion_analysis = analyze_emotion(transcript, risk_level=risk_level, audio_path=audio_path)
+    emotion_analysis = emotion_analysis_override or analyze_emotion(transcript, risk_level=risk_level, audio_path=audio_path)
     logger.info(
         "ai_support.emotion user_id=%s primary_label=%s provider=%s language=%s response_mode=%s",
         user_id,
@@ -49,6 +51,7 @@ def build_support_package(
         context_tag=None,
         memory_records=memory_records,
         recent_trend=recent_trend,
+        session_mode=session_mode,
     )
     response_payload = generate_supportive_response(
         transcript=transcript,

@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.conversations import router as conversations_router
 from app.api.auth import router as auth_router
 from app.api.checkins import router as checkins_router
 from app.api.demo import router as demo_router
@@ -16,11 +17,23 @@ from app.api.resources import router as resources_router
 from app.api.users import router as users_router
 from app.core.config import get_settings
 from app.core.errors import http_exception_handler, validation_exception_handler
-from app.models import JournalEntry, ProcessingAttempt, TreeState, TreeStateEvent, User, UserPreference, WrapupSnapshot
+from app.models import (
+    ConversationSession,
+    ConversationTurn,
+    JournalEntry,
+    ProcessingAttempt,
+    TreeState,
+    TreeStateEvent,
+    User,
+    UserPreference,
+    WrapupSnapshot,
+)
 
 settings = get_settings()
 
 def initialize_database() -> None:
+    ConversationSession.__table__
+    ConversationTurn.__table__
     JournalEntry.__table__
     ProcessingAttempt.__table__
     TreeState.__table__
@@ -70,6 +83,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(checkins_router)
+    app.include_router(conversations_router)
     app.include_router(demo_router)
     app.include_router(dev_router)
     app.include_router(me_router)

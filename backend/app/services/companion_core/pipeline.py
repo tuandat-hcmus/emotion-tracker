@@ -42,6 +42,7 @@ def build_companion_pipeline(
     context_tag: str | None = None,
     memory_records: list[EmotionalMemoryRecord] | None = None,
     recent_trend: dict[str, object] | None = None,
+    session_mode: str | None = None,
     emotion_postprocessor: EmotionPostprocessor | None = None,
 ) -> CompanionPipelineResult:
     render_context = detect_render_context(transcript, topic_tags, context_tag=context_tag)
@@ -73,6 +74,7 @@ def build_companion_pipeline(
         topic_tags=topic_tags,
         risk_level=risk_level,
         recent_trend=recent_trend,
+        session_mode=session_mode,
     )
     response_plan["render_context"] = render_context.model_dump()
     response_plan["normalized_state"] = normalized_state.model_dump()

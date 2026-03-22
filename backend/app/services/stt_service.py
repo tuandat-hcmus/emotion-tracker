@@ -1,4 +1,5 @@
 import logging
+from uuid import uuid4
 from pathlib import Path
 from typing import Protocol
 
@@ -94,3 +95,42 @@ def transcribe_audio(audio_path: str) -> tuple[str, float]:
         confidence,
     )
     return transcript, confidence
+
+
+def build_partial_transcript(chunks: list[bytes]) -> str | None:
+    if not chunks:
+        return None
+    provider_name = get_stt_provider_name()
+    total_bytes = sum(len(chunk) for chunk in chunks)
+    if provider_name == "mock":
+        return f"Listening... {len(chunks)} chunks received."
+    return f"Receiving audio... {total_bytes} bytes buffered."
+
+
+def persist_stream_audio(
+    chunks: list[bytes],
+    uploads_dir: str,
+    extension: str = ".webm",
+) -> str:
+    if not chunks:
+        raise ProviderExecutionError("No audio chunks were received")
+    suffix = extension if extension.startswith(".") else f".{extension}"
+    audio_dir = Path(uploads_dir) / "conversations"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = audio_dir / f"{uuid4()}{suffix}"
+    audio_path.write_bytes(b"".join(chunks))
+    return str(audio_path)
+
+
+def transcribe_stream_audio(
+    chunks: list[bytes],
+    uploads_dir: str,
+    extension: str = ".webm",
+    text_fallback: str | None = None,
+) -> tuple[str, float, str]:
+    audio_path = persist_stream_audio(chunks, uploads_dir=uploads_dir, extension=extension)
+    if text_fallback:
+        logger.info("stt.stream_final_fallback audio_file=%s", Path(audio_path).name)
+        return text_fallback.strip(), 1.0, audio_path
+    transcript, confidence = transcribe_audio(audio_path)
+    return transcript, confidence, audio_path
