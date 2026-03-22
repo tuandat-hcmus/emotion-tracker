@@ -1,6 +1,5 @@
 import {
   Leaf02Icon,
-  Mic01Icon,
   QuoteUpIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons"
@@ -25,30 +24,30 @@ const fadeUp = {
 const flowSteps = [
   {
     eyebrow: "Step 01",
-    title: "Voice Up",
+    title: "Write It Down",
     description:
-      "Just talk. No typing needed. Pour your thoughts into a private, judgment-free space.",
-    icon: Mic01Icon,
+      "Begin with a simple daily check-in. A few honest lines are enough to start.",
+    icon: Leaf02Icon,
   },
   {
     eyebrow: "Step 02",
-    title: "AI Reflection",
+    title: "Receive Reflection",
     description:
-      "Our empathetic AI understands your tone and asks reflective questions to help you dig deeper.",
+      "Receive a calm, supportive response grounded in what you actually shared.",
     icon: SparklesIcon,
   },
   {
     eyebrow: "Step 03",
-    title: "Cultivate Your Forest",
+    title: "Notice Your Patterns",
     description:
-      "Watch your emotional journey bloom into a beautiful 3D landscape based strictly on your core emotions.",
+      "See your recent history and wrapups take shape over time, with the forest quietly supporting the journey.",
     icon: Leaf02Icon,
   },
 ]
 
 const ambientNotes = [
-  "Private voice journaling",
-  "Emotion-aware reflection",
+  "Private daily journaling",
+  "Supportive reflection",
   "A forest that grows with you",
 ]
 
@@ -99,22 +98,22 @@ export default function LandingPage() {
             <motion.div {...fadeUp} className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/40 px-4 py-2 text-sm text-[#2F3E36] shadow-sm backdrop-blur-md">
                 <span>{"\u2728"}</span>
-                <span>Let your emotions flow</span>
+                <span>A calmer way to check in</span>
               </div>
 
               <h1
                 className="mt-6 text-5xl leading-[0.96] font-semibold tracking-tight text-[#2F3E36] sm:text-6xl lg:text-7xl"
                 style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
               >
-                Speak your mind.
+                Write what is true.
                 <br />
-                Let it flow.
+                Let it settle.
               </h1>
 
               <p className="mt-6 max-w-xl text-base leading-8 text-[#2F3E36]/72 sm:text-lg">
-                A voice journal that actively listens, analyzes your feelings,
-                and visualizes your inner landscape as a beautiful, breathing
-                forest.
+                A daily journaling companion for emotional clarity, supportive
+                reflection, and a gentler understanding of your patterns over
+                time.
               </p>
 
               <div className="mt-8 flex flex-col gap-4 sm:flex-row">
@@ -124,13 +123,7 @@ export default function LandingPage() {
                   className="h-12 rounded-full border-0 bg-[#7E9F8B] px-6 text-sm text-white hover:bg-[#5C7D69]"
                 >
                   <Link to="/register">
-                    <HugeiconsIcon
-                      icon={Mic01Icon}
-                      size={16}
-                      strokeWidth={1.8}
-                      className="mr-2"
-                    />
-                    Voice Up Now
+                    Start journaling
                   </Link>
                 </Button>
                 <Button
@@ -189,9 +182,9 @@ export default function LandingPage() {
               Healing happens in the flow.
             </h2>
             <p className="mt-5 text-base leading-8 text-[#2F3E36]/68">
-              eFlow helps you release emotion through voice, receive reflective
-              guidance, and watch your inner landscape become easier to
-              understand over time.
+              eFlow helps you check in through writing, receive reflective
+              guidance, and build a steadier picture of your inner landscape
+              over time.
             </p>
           </motion.div>
 
@@ -280,14 +273,14 @@ export default function LandingPage() {
               Ready to plant your first seed with eFlow?
             </h2>
             <p className="mt-5 text-base leading-8 text-[#2F3E36]/68">
-              Begin with one voice note and let the rest unfold at a human pace.
+              Begin with one honest check-in and let the rest unfold at a human pace.
             </p>
             <Button
               asChild
               size="lg"
               className="mt-8 h-14 rounded-full border-0 bg-[#7E9F8B] px-8 text-sm text-white shadow-[0_18px_42px_rgba(126,159,139,0.24)] hover:bg-[#5C7D69]"
             >
-              <Link to="/register">Start Your Free Journal</Link>
+              <Link to="/register">Start Your Journal</Link>
             </Button>
           </motion.div>
         </section>

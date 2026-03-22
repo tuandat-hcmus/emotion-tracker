@@ -14,6 +14,7 @@ import { Button } from "~/components/ui/button"
 import { useAuth } from "~/context/auth-context"
 import { api, getWebSocketBaseUrl, type ConversationSocketEvent } from "~/lib/api"
 import type { ConversationTurnResult } from "~/lib/contracts"
+import { formatEmotionLabel, isSoulEmotion } from "~/lib/emotions"
 
 type InteractiveVoiceModalProps = {
   open: boolean
@@ -92,6 +93,10 @@ function formatElapsed(seconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
 }
 
+function formatPrimaryFeeling(value: string | null | undefined) {
+  return value && isSoulEmotion(value) ? formatEmotionLabel(value) : "Neutral"
+}
+
 export function InteractiveVoiceModal({
   open,
   onOpenChange,
@@ -122,7 +127,7 @@ export function InteractiveVoiceModal({
     setConnectionError(null)
 
     if (!token) {
-      setConnectionError("Sign in is required before starting a live conversation.")
+      setConnectionError("Please sign in before opening a conversation.")
       setMode("review")
       return
     }
@@ -370,7 +375,7 @@ export function InteractiveVoiceModal({
                       className="max-w-3xl space-y-6 rounded-[2rem] border border-white/40 bg-white/28 px-6 py-6 shadow-sm backdrop-blur-xl"
                     >
                       <p className="text-xs uppercase tracking-[0.35em] text-[#7E9F8B]">
-                        Realtime conversation
+                        Conversation
                       </p>
                       <h2
                         className="text-3xl leading-tight text-[#2F3E36] sm:text-4xl md:text-5xl"
@@ -379,11 +384,8 @@ export function InteractiveVoiceModal({
                         {result?.assistant_response || "The forest replied."}
                       </h2>
                       <p className="mx-auto max-w-2xl text-sm leading-7 text-[#2F3E36]/72 sm:text-base">
-                        Emotion: {result?.emotion_analysis.primary_label || "neutral"} ·
-                        stress{" "}
-                        {typeof result?.emotion_analysis.stress_score === "number"
-                          ? `${Math.round(result.emotion_analysis.stress_score * 100)}%`
-                          : "n/a"}
+                        Holding a {formatPrimaryFeeling(result?.emotion_analysis.primary_label)} feeling.
+                        Take a breath before you decide whether to continue.
                       </p>
                     </motion.div>
                   ) : (
@@ -403,12 +405,12 @@ export function InteractiveVoiceModal({
                         style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
                       >
                         {mode === "connecting"
-                          ? "Opening your conversation..."
+                          ? "Opening a quiet space..."
                           : mode === "listening"
-                            ? "Listening to your thoughts..."
+                            ? "Listening..."
                             : mode === "review"
                               ? "Ready to send this reflection?"
-                              : "Sending this turn to the backend..."}
+                              : "Shaping a thoughtful reply..."}
                       </h2>
                       <p className="text-sm leading-7 text-[#2F3E36]/72">
                         {prompt}
@@ -436,8 +438,7 @@ export function InteractiveVoiceModal({
                     >
                       <ProcessingOrb />
                       <p className="max-w-xl text-sm leading-7 text-[#2F3E36]/70">
-                        Creating the realtime session and connecting the backend
-                        conversation channel.
+                        Preparing your conversation so you can move at a calm pace.
                       </p>
                     </motion.div>
                   ) : null}
@@ -488,7 +489,7 @@ export function InteractiveVoiceModal({
                           Stop listening
                         </Button>
                         <p className="text-xs text-[#2F3E36]/58">
-                          This frontend currently submits transcript text, not live audio.
+                          You can review your words before sending them.
                         </p>
                       </div>
                     </motion.div>
@@ -511,7 +512,7 @@ export function InteractiveVoiceModal({
                             strokeWidth={1.8}
                             className="text-[#D26D57]"
                           />
-                          Review transcript turn
+                          Review this reflection
                         </div>
                         <div className="inline-flex items-center gap-2 rounded-full bg-white/52 px-3 py-1.5 text-xs font-medium text-[#2F3E36]/78">
                           <HugeiconsIcon
@@ -553,7 +554,7 @@ export function InteractiveVoiceModal({
                             strokeWidth={1.8}
                             className="mr-2"
                           />
-                          Send to AI
+                          Send reflection
                         </Button>
                       </div>
                     </motion.div>
@@ -570,8 +571,7 @@ export function InteractiveVoiceModal({
                     >
                       <ProcessingOrb />
                       <p className="max-w-xl text-sm leading-7 text-[#2F3E36]/70">
-                        The backend is processing this turn and keeping rolling
-                        context on the server side.
+                        Taking a moment to respond with care.
                       </p>
                     </motion.div>
                   ) : null}
@@ -645,7 +645,7 @@ export function InteractiveVoiceModal({
                     Are you sure you want to close this conversation?
                   </h3>
                   <p className="mt-4 text-sm leading-7 text-[#2F3E36]/68">
-                    The current realtime session will be ended through the backend.
+                    This conversation will close for now. You can come back whenever you want another quiet moment.
                   </p>
 
                   <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">

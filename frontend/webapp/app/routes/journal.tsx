@@ -214,32 +214,35 @@ export default function JournalPage() {
   }
 
   return (
-    <section className="space-y-5 p-4 md:p-5">
-      <div className="rounded-[1.75rem] border border-white/45 bg-gradient-to-br from-[#A8C3D8]/16 to-[#7E9F8B]/14 p-5">
+    <section className="space-y-5 p-4 md:p-6">
+      <div className="rounded-[2rem] border border-white/45 bg-gradient-to-br from-[#A8C3D8]/16 via-white/44 to-[#7E9F8B]/14 p-6">
         <p className="text-sm uppercase tracking-[0.3em] text-[#7E9F8B]">
           Journal
         </p>
-        <h2 className="mt-3 text-3xl font-semibold text-[#2F3E36]">
-          Text check-in, history, and wrap-up
-        </h2>
-        <p className="mt-3 text-sm leading-6 text-[#2F3E36]/72">
-          This screen now uses the backend check-in, history, summary, calendar,
-          and wrapup contracts without changing the broader app layout.
+        <h1 className="mt-3 text-3xl font-semibold text-[#2F3E36]">
+          A quiet place to check in with yourself
+        </h1>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-[#2F3E36]/72">
+          Start with what feels most present right now. Your recent reflections
+          and longer patterns sit nearby when you want perspective, not pressure.
         </p>
       </div>
 
-      <div className="rounded-[1.75rem] border border-white/45 bg-white/35 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
+      <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-2xl">
             <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              Text check-in
+              Today&apos;s check-in
             </p>
-            <h3 className="mt-2 text-xl font-semibold text-[#2F3E36]">
-              Submit a journal entry
-            </h3>
+            <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
+              Write what this moment feels like
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-[#2F3E36]/70">
+              You can preview the reflection first, then save it when it feels right.
+            </p>
           </div>
-          <span className="rounded-full bg-white/50 px-3 py-1 text-xs text-[#2F3E36]/72">
-            `POST /v1/checkins/text`
+          <span className="rounded-full bg-white/58 px-4 py-2 text-sm text-[#2F3E36]/68">
+            Text journaling first
           </span>
         </div>
 
@@ -249,7 +252,7 @@ export default function JournalPage() {
             setText(event.target.value)
             setPreview(null)
           }}
-          className="mt-4 min-h-36 w-full rounded-[1.5rem] border border-white/50 bg-[#FDFBF7]/75 p-4 text-sm leading-7 text-[#2F3E36] outline-none"
+          className="mt-5 min-h-44 w-full rounded-[1.6rem] border border-white/50 bg-[#FDFBF7]/78 p-5 text-sm leading-7 text-[#2F3E36] outline-none"
           placeholder="Write what today felt like..."
         />
 
@@ -258,116 +261,146 @@ export default function JournalPage() {
             type="button"
             onClick={() => void handlePreview()}
             disabled={isPreviewing || isSubmitting || text.trim().length === 0}
-            className="rounded-full border border-white/50 bg-white/45 px-4 py-2 text-sm text-[#2F3E36] transition-colors hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full border border-white/50 bg-white/48 px-5 py-2.5 text-sm text-[#2F3E36] transition-colors hover:bg-white/72 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isPreviewing ? "Previewing..." : "Preview backend response"}
+            {isPreviewing ? "Preparing preview..." : "Preview reflection"}
           </button>
           <button
             type="button"
             onClick={() => void handleSubmit()}
             disabled={isSubmitting || text.trim().length === 0}
-            className="rounded-full bg-[#7E9F8B] px-4 py-2 text-sm text-white transition-colors hover:bg-[#6D8D7A] disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full bg-[#7E9F8B] px-5 py-2.5 text-sm text-white transition-colors hover:bg-[#6D8D7A] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? "Saving check-in..." : "Save check-in"}
+            {isSubmitting ? "Saving..." : "Save check-in"}
           </button>
         </div>
 
         {pageError ? (
-          <p className="mt-4 rounded-[1rem] bg-[#f4ddd4] px-4 py-3 text-sm text-[#8b4e3d]">
+          <p className="mt-4 rounded-[1rem] bg-[#F7E9E2] px-4 py-3 text-sm text-[#8b4e3d]">
             {pageStatus === "error"
               ? pageError
-              : `Partial data warning: ${pageError}`}
+              : `Some parts of your journal are unavailable right now: ${pageError}`}
           </p>
         ) : null}
 
         {preview ? (
-          <div className="mt-4 rounded-[1.5rem] border border-white/45 bg-[#FDFBF7]/70 p-4">
-            <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              Preview from `POST /v1/me/respond-preview`
-            </p>
-            <p className="mt-3 text-lg font-semibold text-[#2F3E36]">
-              {normalizeLabel(preview.emotion_analysis.primary_label)} · risk{" "}
-              {preview.risk_level}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-[#2F3E36]/78">
-              {preview.ai_response}
-            </p>
-            {preview.follow_up_question ? (
-              <p className="mt-3 text-sm text-[#2F3E36]/72">
-                Follow-up: {preview.follow_up_question}
-              </p>
-            ) : null}
-            {preview.gentle_suggestion ? (
-              <p className="mt-2 text-sm text-[#2F3E36]/72">
-                Suggestion: {preview.gentle_suggestion}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#2F3E36]/68">
-              <span className="rounded-full bg-white/70 px-3 py-1">
+          <div className="mt-5 rounded-[1.6rem] border border-white/45 bg-[#FDFBF7]/72 p-5">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#2F3E36]/62">
+              <span className="rounded-full bg-white/75 px-3 py-1">
+                {normalizeLabel(preview.emotion_analysis.primary_label)}
+              </span>
+              <span className="rounded-full bg-white/75 px-3 py-1">
                 stress {formatPercent(preview.emotion_analysis.stress_score)}
               </span>
-              {preview.topic_tags.map((tag) => (
-                <span key={tag} className="rounded-full bg-white/70 px-3 py-1">
+              {preview.topic_tags.slice(0, 4).map((tag) => (
+                <span key={tag} className="rounded-full bg-white/75 px-3 py-1">
                   {tag}
                 </span>
               ))}
             </div>
+
+            <p className="mt-4 text-lg leading-8 font-medium text-[#2F3E36]">
+              {preview.ai_response}
+            </p>
+
+            {preview.follow_up_question ? (
+              <p className="mt-4 text-sm leading-7 text-[#2F3E36]/70">
+                Consider next: {preview.follow_up_question}
+              </p>
+            ) : null}
+
+            {preview.gentle_suggestion ? (
+              <p className="mt-2 text-sm leading-7 text-[#2F3E36]/70">
+                Gentle support: {preview.gentle_suggestion}
+              </p>
+            ) : null}
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-5 rounded-[1.5rem] border border-dashed border-white/50 bg-white/24 p-4 text-sm leading-6 text-[#2F3E36]/64">
+            Preview a reflection when you want a gentle read on what you&apos;ve written before saving it.
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-5">
-          <div className="rounded-[1.75rem] border border-white/45 bg-white/35 p-5">
-            <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              History
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-[#2F3E36]">
-              Recent timeline
-            </h3>
+          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
+                  Recent reflections
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
+                  A readable history of what you&apos;ve been carrying
+                </h2>
+              </div>
+              <span className="rounded-full bg-white/58 px-4 py-2 text-sm text-[#2F3E36]/68">
+                {history.length} saved
+              </span>
+            </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-5 space-y-4">
               {pageStatus === "loading" ? (
-                <p className="text-sm text-[#2F3E36]/68">Loading history...</p>
+                <p className="text-sm leading-6 text-[#2F3E36]/68">
+                  Loading your recent reflections...
+                </p>
               ) : history.length === 0 ? (
-                <p className="text-sm text-[#2F3E36]/68">
-                  No history returned by the backend yet.
+                <p className="rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
+                  Your first saved check-in will appear here with the feeling it carried and the response it received.
                 </p>
               ) : (
                 history.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-[1.4rem] border border-white/45 bg-[#FDFBF7]/72 p-4"
+                    className="rounded-[1.5rem] border border-white/45 bg-[#FDFBF7]/74 p-5"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-[#2F3E36]">
-                        {normalizeLabel(item.primary_label)}
-                      </p>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-white/80 px-3 py-1 text-xs text-[#2F3E36]/68">
+                          {normalizeLabel(item.primary_label)}
+                        </span>
+                        {item.stress_score != null ? (
+                          <span className="rounded-full bg-white/80 px-3 py-1 text-xs text-[#2F3E36]/68">
+                            stress {formatPercent(item.stress_score)}
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="text-xs text-[#2F3E36]/56">
                         {formatDateTime(item.created_at)}
                       </p>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-[#2F3E36]/74">
-                      {item.transcript_excerpt || "No transcript excerpt"}
+
+                    <p className="mt-4 text-sm leading-7 text-[#2F3E36]/76">
+                      {item.transcript_excerpt ||
+                        "A reflection was saved for this moment."}
                     </p>
-                    <p className="mt-2 text-xs text-[#2F3E36]/60">
-                      Response: {item.ai_response_excerpt || "No response excerpt"}
-                    </p>
+
+                    <div className="mt-4 rounded-[1.25rem] bg-white/72 px-4 py-3">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[#7E9F8B]">
+                        Response
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-[#2F3E36]/68">
+                        {item.ai_response_excerpt ||
+                          "A supportive response was saved with this entry."}
+                      </p>
+                    </div>
                   </div>
                 ))
               )}
             </div>
           </div>
+        </div>
 
-          <div className="rounded-[1.75rem] border border-white/45 bg-white/35 p-5">
+        <div className="space-y-5">
+          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
                   Wrapup
                 </p>
-                <h3 className="mt-2 text-xl font-semibold text-[#2F3E36]">
-                  Latest {wrapupKind} wrapup
-                </h3>
+                <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
+                  Your latest {wrapupKind} reflection
+                </h2>
               </div>
               <div className="flex gap-2">
                 <button
@@ -376,7 +409,7 @@ export default function JournalPage() {
                   className={`rounded-full px-3 py-1.5 text-xs ${
                     wrapupKind === "weekly"
                       ? "bg-[#7E9F8B] text-white"
-                      : "bg-white/50 text-[#2F3E36]/70"
+                      : "bg-white/58 text-[#2F3E36]/70"
                   }`}
                 >
                   Weekly
@@ -387,7 +420,7 @@ export default function JournalPage() {
                   className={`rounded-full px-3 py-1.5 text-xs ${
                     wrapupKind === "monthly"
                       ? "bg-[#7E9F8B] text-white"
-                      : "bg-white/50 text-[#2F3E36]/70"
+                      : "bg-white/58 text-[#2F3E36]/70"
                   }`}
                 >
                   Monthly
@@ -396,12 +429,12 @@ export default function JournalPage() {
             </div>
 
             {wrapup ? (
-              <div className="mt-4 space-y-4">
-                <p className="text-sm leading-6 text-[#2F3E36]/74">
+              <div className="mt-5 space-y-4">
+                <p className="text-sm leading-7 text-[#2F3E36]/74">
                   {wrapup.payload.summary_text || wrapup.payload.closing_message}
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[1.25rem] bg-[#FDFBF7]/72 p-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <div className="rounded-[1.25rem] bg-[#FDFBF7]/74 p-4">
                     <p className="text-xs uppercase tracking-[0.24em] text-[#7E9F8B]">
                       Period
                     </p>
@@ -409,7 +442,7 @@ export default function JournalPage() {
                       {wrapup.payload.period_start} to {wrapup.payload.period_end}
                     </p>
                   </div>
-                  <div className="rounded-[1.25rem] bg-[#FDFBF7]/72 p-4">
+                  <div className="rounded-[1.25rem] bg-[#FDFBF7]/74 p-4">
                     <p className="text-xs uppercase tracking-[0.24em] text-[#7E9F8B]">
                       High stress
                     </p>
@@ -418,82 +451,86 @@ export default function JournalPage() {
                     </p>
                   </div>
                 </div>
-                {wrapup.payload.insight_cards.slice(0, 3).map((card) => (
+
+                {wrapup.payload.insight_cards.slice(0, 2).map((card) => (
                   <div
                     key={`${card.kind}-${card.title}`}
-                    className="rounded-[1.25rem] bg-[#FDFBF7]/72 p-4"
+                    className="rounded-[1.25rem] bg-[#FDFBF7]/74 p-4"
                   >
-                    <p className="text-sm font-medium text-[#2F3E36]">{card.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-[#2F3E36]/72">
+                    <p className="text-sm font-medium text-[#2F3E36]">
+                      {card.title}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-[#2F3E36]/70">
                       {card.summary}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-4 text-sm text-[#2F3E36]/68">
-                No wrapup payload loaded.
+              <p className="mt-5 rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
+                A wrapup will appear here once enough recent check-ins have been gathered.
               </p>
             )}
           </div>
-        </div>
 
-        <div className="space-y-5">
-          <div className="rounded-[1.75rem] border border-white/45 bg-white/35 p-5">
+          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
             <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              Summary
+              Recent patterns
             </p>
-            <h3 className="mt-2 text-xl font-semibold text-[#2F3E36]">
-              30-day backend summary
-            </h3>
+            <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
+              What your last 30 days suggest
+            </h2>
 
             {summary ? (
-              <div className="mt-4 space-y-3">
-                <p className="text-sm leading-6 text-[#2F3E36]/74">
-                  {summary.summary_text || "No summary text returned yet."}
+              <div className="mt-5 space-y-4">
+                <p className="text-sm leading-7 text-[#2F3E36]/74">
+                  {summary.summary_text || "More summary details will appear here as you keep checking in."}
                 </p>
                 <div className="flex flex-wrap gap-2 text-xs text-[#2F3E36]/68">
-                  <span className="rounded-full bg-[#FDFBF7]/72 px-3 py-1">
-                    entries {summary.total_entries}
+                  <span className="rounded-full bg-[#FDFBF7]/74 px-3 py-1">
+                    {summary.total_entries} entries
                   </span>
-                  <span className="rounded-full bg-[#FDFBF7]/72 px-3 py-1">
-                    stress {formatPercent(summary.high_stress_frequency)}
+                  <span className="rounded-full bg-[#FDFBF7]/74 px-3 py-1">
+                    {formatPercent(summary.high_stress_frequency)} high stress
                   </span>
-                  <span className="rounded-full bg-[#FDFBF7]/72 px-3 py-1">
-                    trend {summary.emotional_direction_trend}
+                  <span className="rounded-full bg-[#FDFBF7]/74 px-3 py-1">
+                    {summary.emotional_direction_trend}
                   </span>
                 </div>
-                {summary.recurring_triggers.slice(0, 4).map((trigger) => (
-                  <p key={trigger} className="rounded-full bg-[#FDFBF7]/72 px-3 py-2 text-xs">
+                {summary.recurring_triggers.slice(0, 3).map((trigger) => (
+                  <p
+                    key={trigger}
+                    className="rounded-[1.1rem] bg-[#FDFBF7]/74 px-4 py-3 text-sm leading-6 text-[#2F3E36]/68"
+                  >
                     {trigger}
                   </p>
                 ))}
               </div>
             ) : (
-              <p className="mt-4 text-sm text-[#2F3E36]/68">
-                No summary payload loaded.
+              <p className="mt-5 rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
+                Your longer-view patterns will appear here after more check-ins are saved.
               </p>
             )}
           </div>
 
-          <div className="rounded-[1.75rem] border border-white/45 bg-white/35 p-5">
+          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
             <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              Calendar
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-[#2F3E36]">
               Recent check-in days
-            </h3>
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
+              A gentle view of recent rhythm
+            </h2>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-5 space-y-3">
               {calendar.length === 0 ? (
-                <p className="text-sm text-[#2F3E36]/68">
-                  No calendar data loaded.
+                <p className="rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
+                  Recent days will show up here once you&apos;ve checked in.
                 </p>
               ) : (
-                calendar.slice(0, 8).map((day) => (
+                calendar.slice(0, 6).map((day) => (
                   <div
                     key={day.date}
-                    className="flex items-center justify-between gap-3 rounded-[1.25rem] bg-[#FDFBF7]/72 p-4"
+                    className="flex items-center justify-between gap-3 rounded-[1.25rem] bg-[#FDFBF7]/74 p-4"
                   >
                     <div>
                       <p className="text-sm font-medium text-[#2F3E36]">{day.date}</p>
@@ -501,8 +538,8 @@ export default function JournalPage() {
                         {normalizeLabel(day.primary_emotion_label)} · {day.entry_count} entries
                       </p>
                     </div>
-                    <span className="rounded-full bg-white/70 px-3 py-1 text-xs text-[#2F3E36]/72">
-                      stress {formatPercent(day.average_stress_score)}
+                    <span className="rounded-full bg-white/75 px-3 py-1 text-xs text-[#2F3E36]/72">
+                      {formatPercent(day.average_stress_score)} stress
                     </span>
                   </div>
                 ))

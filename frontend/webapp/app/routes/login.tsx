@@ -75,7 +75,7 @@ export default function LoginPage() {
       title="Sign in and keep going."
       description="Pick up your journal where you left off."
       helperLink={{ label: "Need an account?", to: "/register" }}
-      highlights={["Private notes", "AI reflection", "Growing forest"]}
+      highlights={["Private journal", "Gentle reflection", "Daily clarity"]}
     >
       <p className="text-xs tracking-[0.32em] text-[#7E9F8B] uppercase">
         Sign in
@@ -144,7 +144,7 @@ export default function LoginPage() {
           Create a new account
         </Link>
         <span className="rounded-full bg-white/60 px-4 py-2">
-          Backend auth enabled
+          Private by default
         </span>
       </div>
     </AuthShell>

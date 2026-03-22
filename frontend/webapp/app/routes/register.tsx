@@ -92,7 +92,7 @@ export default function RegisterPage() {
       title="Create your account."
       description="Start your journal in under a minute."
       helperLink={{ label: "Already have an account?", to: "/login" }}
-      highlights={["Private by default", "Voice-first", "Free to start"]}
+      highlights={["Private by default", "Text journaling", "Gentle support"]}
     >
       <p className="text-xs tracking-[0.32em] text-[#7E9F8B] uppercase">
         Register
@@ -197,7 +197,7 @@ export default function RegisterPage() {
           Already using eFlow?
         </Link>
         <span className="rounded-full bg-white/60 px-4 py-2">
-          Backend auth enabled
+          Calm start
         </span>
       </div>
     </AuthShell>
