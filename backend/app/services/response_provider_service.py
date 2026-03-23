@@ -42,6 +42,11 @@ class MockResponseGeneratorProvider:
         acknowledgment_focus = str(response_plan.get("acknowledgment_focus", "mixed_state"))
         suggestion_family = response_plan.get("suggestion_family")
         response_variant = str(response_plan.get("response_variant", "empathy_only"))
+        render_context = dict(response_plan.get("render_context", {}))
+        support_strategy = dict(response_plan.get("support_strategy", {}))
+        user_stance = str(render_context.get("user_stance", ""))
+        concern_target = str(render_context.get("concern_target") or "")
+        response_goal = str(support_strategy.get("response_goal") or "")
 
         if language == "vi":
             primary_topic = topic_tags[0] if topic_tags else "đời sống hằng ngày"
@@ -79,8 +84,15 @@ class MockResponseGeneratorProvider:
             suggestion_text = build_suggestion_text(
                 suggestion_family=str(suggestion_family) if suggestion_family is not None else None,
                 language="vi",
+                render_context=render_context,
+                support_strategy=support_strategy,
             )
-            follow_up_question = build_follow_up_question(response_mode=response_mode, language="vi")
+            follow_up_question = build_follow_up_question(
+                response_mode=response_mode,
+                language="vi",
+                render_context=render_context,
+                support_strategy=support_strategy,
+            )
             if response_variant == "empathy_only":
                 suggestion_text = None
                 follow_up_question = None
@@ -103,7 +115,27 @@ class MockResponseGeneratorProvider:
                 "debug": {"renderer_selected": "mock", "render_language": "vi"},
             }
 
-        if response_mode == "celebratory_warm":
+        if user_stance == "worried_about_other":
+            target = (
+                f"your {concern_target}"
+                if concern_target and concern_target != "named_person"
+                else "someone you care about"
+            )
+            empathetic_text = (
+                f"It can be hard to see {target} seem that weighed down. "
+                "It makes sense if part of you feels worried and a little unsure what to do next."
+            )
+        elif user_stance == "guilty_toward_other":
+            empathetic_text = (
+                "It sounds like this is staying with you because you care and you wish it had gone differently. "
+                "That can feel heavy to carry on your own."
+            )
+        elif response_goal == "reinforce_positive_moment" and response_mode == "celebratory_warm":
+            empathetic_text = (
+                f"That sounds like a real moment of relief around {primary_topic}. "
+                "It makes sense if part of you wants to stay with that for a second."
+            )
+        elif response_mode == "celebratory_warm":
             empathetic_text = (
                 f"I can hear a steadier, warmer note in what you shared about {primary_topic}. "
                 "That shift sounds real, and it deserves to be noticed."
@@ -142,8 +174,15 @@ class MockResponseGeneratorProvider:
         suggestion_text = build_suggestion_text(
             suggestion_family=str(suggestion_family) if suggestion_family is not None else None,
             language="en",
+            render_context=render_context,
+            support_strategy=support_strategy,
         )
-        follow_up_question = build_follow_up_question(response_mode=response_mode, language="en")
+        follow_up_question = build_follow_up_question(
+            response_mode=response_mode,
+            language="en",
+            render_context=render_context,
+            support_strategy=support_strategy,
+        )
         if response_variant == "empathy_only":
             suggestion_text = None
             follow_up_question = None

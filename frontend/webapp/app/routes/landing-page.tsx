@@ -85,7 +85,7 @@ export default function LandingPage() {
                 asChild
                 className="h-11 rounded-full border-0 bg-[#7E9F8B] px-5 text-sm text-white hover:bg-[#5C7D69]"
               >
-                <Link to="/register">Start Your Journey</Link>
+                <Link to="/register">Start journaling</Link>
               </Button>
             </nav>
           </div>
@@ -179,7 +179,7 @@ export default function LandingPage() {
               className="mt-4 text-4xl leading-tight text-[#2F3E36] sm:text-5xl"
               style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
             >
-              Healing happens in the flow.
+              A steadier way to understand yourself.
             </h2>
             <p className="mt-5 text-base leading-8 text-[#2F3E36]/68">
               eFlow helps you check in through writing, receive reflective
@@ -270,7 +270,7 @@ export default function LandingPage() {
               className="mt-6 text-4xl leading-tight text-[#2F3E36] sm:text-5xl"
               style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
             >
-              Ready to plant your first seed with eFlow?
+              Ready to begin your first check-in?
             </h2>
             <p className="mt-5 text-base leading-8 text-[#2F3E36]/68">
               Begin with one honest check-in and let the rest unfold at a human pace.

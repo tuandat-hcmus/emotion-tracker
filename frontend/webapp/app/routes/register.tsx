@@ -182,7 +182,7 @@ export default function RegisterPage() {
           disabled={isSubmitting}
           className="h-12 w-full rounded-full border-0 bg-[#7E9F8B] text-white hover:bg-[#5C7D69]"
         >
-          {isSubmitting ? "Planting your first seed..." : "Create account"}
+          {isSubmitting ? "Creating account..." : "Create account"}
           <HugeiconsIcon
             icon={ArrowRight01Icon}
             size={16}

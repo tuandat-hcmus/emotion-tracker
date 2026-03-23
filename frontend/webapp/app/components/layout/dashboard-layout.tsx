@@ -6,7 +6,7 @@ import {
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Suspense, lazy, useState } from "react"
-import { Navigate, NavLink, Outlet } from "react-router"
+import { Navigate, NavLink, Outlet, useLocation } from "react-router"
 
 import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
 import { useAuth } from "~/context/auth-context"
@@ -81,6 +81,8 @@ export function DashboardLayout() {
   const { isAuthenticated, isReady } = useAuth()
   const { currentMood, treeScore } = useSoulForest()
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false)
+  const location = useLocation()
+  const isJournalRoute = location.pathname.startsWith("/app/journal")
 
   function prepareVoiceModal() {
     void loadInteractiveVoiceModal()
@@ -107,36 +109,40 @@ export function DashboardLayout() {
         <div className="absolute bottom-12 right-[-4rem] h-72 w-72 rounded-full bg-[#7E9F8B]/18 blur-3xl" />
       </div>
 
-      <div className="pointer-events-none fixed inset-y-8 left-[7.5rem] z-0 hidden w-[min(26rem,32vw)] items-center md:flex">
-        <motion.div
-          initial={{ opacity: 0.24, scale: 0.96 }}
-          animate={{ opacity: 0.72, scale: 1 }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          className="h-[32rem] w-full rounded-[2.25rem] border border-white/28 bg-white/10 p-4 backdrop-blur-[2px]"
-        >
-          <DeferredSoulTree
-            emotion={currentMood}
-            score={treeScore}
-            deferMs={220}
-            className="h-full rounded-[1.8rem] border-0 bg-transparent shadow-none"
-          />
-        </motion.div>
-      </div>
+      {!isJournalRoute ? (
+        <div className="pointer-events-none fixed inset-y-8 left-[7.5rem] z-0 hidden w-[min(22rem,28vw)] items-center lg:flex">
+          <motion.div
+            initial={{ opacity: 0.24, scale: 0.96 }}
+            animate={{ opacity: 0.72, scale: 1 }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            className="h-[30rem] w-full rounded-[2.25rem] border border-white/28 bg-white/10 p-4 backdrop-blur-[2px]"
+          >
+            <DeferredSoulTree
+              emotion={currentMood}
+              score={treeScore}
+              deferMs={220}
+              className="h-full rounded-[1.8rem] border-0 bg-transparent shadow-none"
+            />
+          </motion.div>
+        </div>
+      ) : null}
 
       <div className="relative z-10 min-h-svh">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="pointer-events-none fixed right-6 top-6 z-20 hidden md:block"
-        >
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/45 bg-white/48 px-4 py-2 text-sm font-medium text-[#2F3E36] shadow-sm backdrop-blur-xl">
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: getEmotionColor(currentMood) }}
-            />
-            {formatEmotionLabel(currentMood)}
-          </div>
-        </motion.div>
+        {!isJournalRoute ? (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="pointer-events-none fixed right-6 top-6 z-20 hidden lg:block"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/45 bg-white/48 px-4 py-2 text-sm font-medium text-[#2F3E36] shadow-sm backdrop-blur-xl">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: getEmotionColor(currentMood) }}
+              />
+              {formatEmotionLabel(currentMood)}
+            </div>
+          </motion.div>
+        ) : null}
 
         <aside className="fixed left-6 top-1/2 z-30 hidden w-20 -translate-y-1/2 rounded-[2rem] border border-white/40 bg-white/44 p-3 shadow-[0_18px_70px_rgba(47,62,54,0.1)] backdrop-blur-xl md:flex md:flex-col md:items-center md:justify-between md:gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7E9F8B] text-sm font-semibold text-white shadow-[0_12px_25px_rgba(126,159,139,0.28)]">
@@ -168,8 +174,14 @@ export function DashboardLayout() {
         </aside>
 
         <main className="relative min-h-svh pb-24 md:pb-10">
-          <div className="mx-auto w-full max-w-md px-4 pt-4 md:max-w-7xl md:px-8 md:pb-8 md:pl-[7.5rem] md:pt-8">
-            <div className="md:ml-[min(23rem,29vw)] md:max-w-[min(54rem,calc(100vw-13rem))]">
+          <div className="mx-auto w-full max-w-md px-4 pt-4 md:max-w-5xl md:px-8 md:pb-8 md:pt-8 lg:max-w-7xl lg:pl-[7.5rem]">
+            <div
+              className={
+                isJournalRoute
+                  ? "lg:max-w-[min(76rem,calc(100vw-9rem))]"
+                  : "lg:ml-[min(20rem,25vw)] lg:max-w-[min(54rem,calc(100vw-13rem))]"
+              }
+            >
               <div className="min-h-[calc(100svh-2rem)] rounded-[2rem] border border-white/42 bg-white/42 shadow-[0_18px_70px_rgba(47,62,54,0.08)] backdrop-blur-xl md:min-h-[calc(100svh-4rem)]">
                 <div className="min-h-[calc(100svh-2rem)] md:max-h-[calc(100svh-4rem)] md:overflow-y-auto md:overscroll-contain">
                   <Outlet />

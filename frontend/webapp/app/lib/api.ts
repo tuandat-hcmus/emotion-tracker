@@ -136,6 +136,9 @@ export const api = {
       body: JSON.stringify(payload),
     })
   },
+  getCheckin(token: string, entryId: string) {
+    return requestJson<CheckinDetail>(`/v1/checkins/${entryId}`, { token })
+  },
   getHistory(token: string, userId: string, limit = 20, offset = 0) {
     return requestJson<JournalHistoryResponse>(
       `/v1/users/${userId}/entries?limit=${limit}&offset=${offset}`,

@@ -29,6 +29,33 @@ UNSUPPORTED_PHRASES = (
 UNSUPPORTED_PATTERNS = (
     re.compile(r"\bbecause\s+[^.?!]{0,80}\bhappened\b", re.IGNORECASE),
 )
+REDUNDANT_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "for",
+    "from",
+    "i",
+    "if",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "right",
+    "that",
+    "the",
+    "this",
+    "to",
+    "with",
+    "you",
+    "your",
+}
 
 
 def _contains_clinical_claim(text: str) -> bool:
@@ -50,6 +77,39 @@ def _contains_unsupported_specifics(text: str, transcript: str) -> bool:
         if phrase in lowered_text and phrase not in lowered_transcript:
             return True
     return any(pattern.search(text) and not pattern.search(transcript) for pattern in UNSUPPORTED_PATTERNS)
+
+
+def _normalize_overlap_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z']+", text.casefold())
+        if len(token) > 2 and token not in REDUNDANT_STOPWORDS
+    }
+
+
+def _is_redundant(candidate: str | None, *others: str | None) -> bool:
+    if not candidate:
+        return False
+    normalized_candidate = candidate.casefold().strip(" .?!")
+    candidate_tokens = _normalize_overlap_tokens(candidate)
+    if not candidate_tokens:
+        return False
+
+    for other in others:
+        if not other:
+            continue
+        normalized_other = other.casefold().strip(" .?!")
+        if not normalized_other:
+            continue
+        if normalized_candidate in normalized_other or normalized_other in normalized_candidate:
+            return True
+        other_tokens = _normalize_overlap_tokens(other)
+        if not other_tokens:
+            continue
+        overlap = len(candidate_tokens & other_tokens) / max(len(candidate_tokens), 1)
+        if overlap >= 0.72:
+            return True
+    return False
 
 
 def postcheck_rendered_response(
@@ -110,8 +170,17 @@ def postcheck_rendered_response(
     fallback_suggestion = build_suggestion_text(
         suggestion_family=str(suggestion_family) if suggestion_family is not None else None,
         language=language,
+        render_context=dict(response_plan.get("render_context", {})),
+        normalized_state=dict(response_plan.get("normalized_state", {})),
+        support_strategy=dict(response_plan.get("support_strategy", {})),
     )
-    fallback_follow_up = build_follow_up_question(response_mode=response_mode, language=language)
+    fallback_follow_up = build_follow_up_question(
+        response_mode=response_mode,
+        language=language,
+        render_context=dict(response_plan.get("render_context", {})),
+        normalized_state=dict(response_plan.get("normalized_state", {})),
+        support_strategy=dict(response_plan.get("support_strategy", {})),
+    )
 
     # Enforce one coherent output variant.
     if response_variant == "empathy_only":
@@ -143,6 +212,20 @@ def postcheck_rendered_response(
     if unsupported_specifics_detected and response_variant == "empathy_plus_suggestion":
         suggestion_text = fallback_suggestion
         follow_up_question = None
+
+    if follow_up_question is not None and not follow_up_question.endswith("?"):
+        follow_up_question = follow_up_question.rstrip(". ") + "?"
+
+    if suggestion_text is not None and _is_redundant(suggestion_text, empathetic_text, follow_up_question):
+        suggestion_text = None
+    if follow_up_question is not None and _is_redundant(follow_up_question, empathetic_text, suggestion_text):
+        follow_up_question = None
+        if response_variant == "empathy_plus_followup" and bool(response_plan.get("follow_up_question_allowed")):
+            follow_up_question = fallback_follow_up
+            if follow_up_question is not None and not follow_up_question.endswith("?"):
+                follow_up_question = follow_up_question.rstrip(". ") + "?"
+            if follow_up_question is not None and _is_redundant(follow_up_question, empathetic_text):
+                follow_up_question = None
 
     effective_quote_text = quote_text if response_plan.get("quote_allowed") and effective_quote_allowed else None
     max_sentences = int(response_plan.get("max_sentences", 3))

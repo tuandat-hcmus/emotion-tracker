@@ -75,6 +75,9 @@ def build_companion_pipeline(
         risk_level=risk_level,
         recent_trend=recent_trend,
         session_mode=session_mode,
+        render_context=render_context.model_dump(),
+        normalized_state=normalized_state.model_dump(),
+        support_strategy=support_strategy.model_dump(),
     )
     response_plan["render_context"] = render_context.model_dump()
     response_plan["normalized_state"] = normalized_state.model_dump()

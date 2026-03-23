@@ -1,18 +1,24 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import type { ReactNode } from "react"
 
+import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
 import { useAuth } from "~/context/auth-context"
 import { useSoulForest } from "~/context/soul-forest-context"
 import { api } from "~/lib/api"
 import type {
   CalendarDayItem,
+  CheckinDetail,
+  ConversationSessionResponse,
+  ConversationTurnResponse,
   JournalHistoryItem,
   RespondPreviewResponse,
   UserSummaryResponse,
   WrapupSnapshotResponse,
 } from "~/lib/contracts"
-import { formatEmotionLabel, isSoulEmotion } from "~/lib/emotions"
+import { formatEmotionLabel, getEmotionColor, isSoulEmotion } from "~/lib/emotions"
 
 type WrapupKind = "weekly" | "monthly"
+type TrendsTab = "7d" | "30d" | "month"
 
 function formatDateTime(value: string) {
   const parsed = new Date(value)
@@ -27,6 +33,33 @@ function formatDateTime(value: string) {
   })
 }
 
+function formatRelativeDateLabel(value: string) {
+  const parsed = new Date(value)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "Earlier"
+  }
+
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const target = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+  const diffDays = Math.round((today.getTime() - target.getTime()) / 86400000)
+
+  if (diffDays === 0) {
+    return "Today"
+  }
+
+  if (diffDays === 1) {
+    return "Yesterday"
+  }
+
+  if (diffDays > 1 && diffDays < 7) {
+    return parsed.toLocaleDateString([], { weekday: "long" })
+  }
+
+  return parsed.toLocaleDateString([], { dateStyle: "medium" })
+}
+
 function formatPercent(value: number | null | undefined) {
   if (typeof value !== "number") {
     return "n/a"
@@ -37,6 +70,119 @@ function formatPercent(value: number | null | undefined) {
 
 function normalizeLabel(value: string | null | undefined) {
   return value && isSoulEmotion(value) ? formatEmotionLabel(value) : "Neutral"
+}
+
+function MiniBarChart({
+  items,
+}: {
+  items: Array<{ color: string; label: string; value: number }>
+}) {
+  const maxValue = Math.max(...items.map((item) => item.value), 1)
+
+  return (
+    <div className="flex items-end gap-2">
+      {items.map((item) => (
+        <div key={item.label} className="flex flex-1 flex-col items-center gap-2">
+          <div
+            className="w-full rounded-full"
+            style={{
+              height: 18 + (item.value / maxValue) * 34,
+              backgroundColor: item.color,
+              opacity: item.value > 0 ? 0.9 : 0.28,
+            }}
+          />
+          <span className="text-[0.65rem] text-[#2F3E36]/45">{item.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MiniSparkline({
+  points,
+}: {
+  points: number[]
+}) {
+  if (points.length === 0) {
+    return (
+      <div className="flex h-16 items-center justify-center rounded-[1rem] bg-white/52 text-sm text-[#2F3E36]/52">
+        No trend yet
+      </div>
+    )
+  }
+
+  const width = 220
+  const height = 64
+  const min = Math.min(...points)
+  const max = Math.max(...points)
+  const range = max - min || 1
+
+  const path = points
+    .map((point, index) => {
+      const x = (index / Math.max(points.length - 1, 1)) * width
+      const y = height - ((point - min) / range) * (height - 12) - 6
+      return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`
+    })
+    .join(" ")
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-16 w-full overflow-visible">
+      <path
+        d={path}
+        fill="none"
+        stroke="#7E9F8B"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function MiniStackedBar({
+  items,
+}: {
+  items: Array<{ color: string; label: string; value: number }>
+}) {
+  const total = items.reduce((sum, item) => sum + item.value, 0)
+
+  if (total <= 0) {
+    return (
+      <div className="rounded-[1rem] bg-white/52 px-4 py-5 text-sm text-[#2F3E36]/52">
+        Mood distribution will appear here once more check-ins are saved.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex h-3 overflow-hidden rounded-full bg-white/60">
+        {items
+          .filter((item) => item.value > 0)
+          .map((item) => (
+            <div
+              key={item.label}
+              style={{
+                width: `${(item.value / total) * 100}%`,
+                backgroundColor: item.color,
+              }}
+            />
+          ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {items
+          .filter((item) => item.value > 0)
+          .map((item) => (
+            <span
+              key={item.label}
+              className="rounded-full bg-white/68 px-3 py-1 text-[0.68rem] text-[#2F3E36]/68"
+            >
+              {item.label} {item.value}
+            </span>
+          ))}
+      </div>
+    </div>
+  )
 }
 
 type JournalLoadState = {
@@ -53,9 +199,87 @@ const INITIAL_LOAD_STATE: JournalLoadState = {
   wrapup: null,
 }
 
+function ThreadBubble({
+  align = "left",
+  badge,
+  meta,
+  text,
+  timestamp,
+  note,
+  footer,
+}: {
+  align?: "left" | "right"
+  badge?: string | null
+  meta?: string | null
+  text: string
+  timestamp?: string | null
+  note?: string | null
+  footer?: ReactNode
+}) {
+  const isRight = align === "right"
+
+  return (
+    <div className={`flex ${isRight ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[92%] rounded-[1.7rem] px-4 py-3 shadow-sm sm:max-w-[78%] ${
+          isRight
+            ? "bg-[#7E9F8B] text-white shadow-[0_14px_28px_rgba(126,159,139,0.18)]"
+            : "border border-[#E7E0D3] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,245,238,1))] text-[#2F3E36] shadow-[0_12px_24px_rgba(80,94,87,0.08)]"
+        }`}
+      >
+        {badge ? (
+          <div className="flex items-center gap-2">
+            {!isRight ? (
+              <span className="h-2 w-2 rounded-full bg-[#7E9F8B]/70 shadow-[0_0_0_4px_rgba(126,159,139,0.08)]" />
+            ) : null}
+            <p
+              className={`text-[0.62rem] uppercase tracking-[0.16em] ${
+                isRight ? "text-white/64" : "text-[#7E9F8B]/84"
+              }`}
+            >
+              {badge}
+            </p>
+            {meta ? (
+              <span
+                className={`rounded-full px-2.5 py-1 text-[0.65rem] ${
+                  isRight
+                    ? "bg-white/14 text-white/74"
+                    : "bg-[#F1F5EF] text-[#6A8375]"
+                }`}
+              >
+                {meta}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-7">{text}</p>
+        {note ? (
+          <p
+            className={`mt-2 text-[0.68rem] ${
+              isRight ? "text-white/58" : "text-[#2F3E36]/46"
+            }`}
+          >
+            {note}
+          </p>
+        ) : null}
+        {footer ? <div className="mt-3 space-y-2 text-sm leading-6">{footer}</div> : null}
+        {timestamp ? (
+          <p
+            className={`mt-2 text-[0.68rem] tracking-[0.04em] ${
+              isRight ? "text-white/58" : "text-[#2F3E36]/38"
+            }`}
+          >
+            {timestamp}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export default function JournalPage() {
   const { token, user } = useAuth()
-  const { refreshHome, syncCheckinResult } = useSoulForest()
+  const { currentMood, refreshHome, syncCheckinResult, treeScore } = useSoulForest()
   const [text, setText] = useState("")
   const [history, setHistory] = useState<JournalHistoryItem[]>(INITIAL_LOAD_STATE.history)
   const [summary, setSummary] = useState<UserSummaryResponse | null>(INITIAL_LOAD_STATE.summary)
@@ -69,6 +293,23 @@ export default function JournalPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [conversationSessions, setConversationSessions] = useState<
+    ConversationSessionResponse[]
+  >([])
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
+    null
+  )
+  const [selectedConversationTurns, setSelectedConversationTurns] = useState<
+    ConversationTurnResponse[]
+  >([])
+  const [conversationStatus, setConversationStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle")
+  const [historyDetails, setHistoryDetails] = useState<Record<string, CheckinDetail>>({})
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [trendsTab, setTrendsTab] = useState<TrendsTab>("7d")
+  const threadViewportRef = useRef<HTMLDivElement | null>(null)
+  const threadBottomRef = useRef<HTMLDivElement | null>(null)
 
   async function reloadJournalData(activeWrapupKind: WrapupKind) {
     if (!token || !user) {
@@ -82,6 +323,7 @@ export default function JournalPage() {
       activeWrapupKind === "weekly"
         ? api.getLatestWeeklyWrapup(token)
         : api.getLatestMonthlyWrapup(token),
+      api.getConversationSessions(token, 8, 0),
     ])
 
     const failures = results.filter(
@@ -112,6 +354,20 @@ export default function JournalPage() {
       setWrapup(null)
     }
 
+    if (results[4]?.status === "fulfilled") {
+      const sessions = results[4].value.items
+      setConversationSessions(sessions)
+      setSelectedConversationId((current) => {
+        if (current && sessions.some((item) => item.id === current)) {
+          return current
+        }
+        return sessions[0]?.id ?? null
+      })
+    } else {
+      setConversationSessions([])
+      setSelectedConversationId(null)
+    }
+
     if (failures.length === 0) {
       setPageStatus("ready")
       setPageError(null)
@@ -129,6 +385,7 @@ export default function JournalPage() {
 
   useEffect(() => {
     if (!token || !user) {
+      setHistoryDetails({})
       return
     }
 
@@ -162,6 +419,111 @@ export default function JournalPage() {
       cancelled = true
     }
   }, [token, user, wrapupKind])
+
+  useEffect(() => {
+    if (!token || !selectedConversationId) {
+      setSelectedConversationTurns([])
+      setConversationStatus("idle")
+      return
+    }
+
+    const accessToken = token as string
+    const sessionId = selectedConversationId as string
+    let cancelled = false
+
+    async function loadConversationTurns() {
+      setConversationStatus("loading")
+
+      try {
+        const response = await api.getConversationSessionTurns(
+          accessToken,
+          sessionId,
+          24,
+          0
+        )
+
+        if (cancelled) {
+          return
+        }
+
+        setSelectedConversationTurns(response.items)
+        setConversationStatus("ready")
+      } catch {
+        if (cancelled) {
+          return
+        }
+
+        setSelectedConversationTurns([])
+        setConversationStatus("error")
+      }
+    }
+
+    void loadConversationTurns()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedConversationId, token])
+
+  useEffect(() => {
+    if (!token) {
+      setHistoryDetails({})
+      return
+    }
+
+    const authToken = token
+    const visibleEntries = history.slice(0, 8)
+
+    if (visibleEntries.length === 0) {
+      setHistoryDetails({})
+      return
+    }
+
+    const visibleEntryIds = new Set(visibleEntries.map((item) => item.entry_id))
+    setHistoryDetails((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([entryId]) => visibleEntryIds.has(entryId))
+      )
+    )
+
+    let cancelled = false
+
+    async function loadVisibleEntryDetails() {
+      const results = await Promise.allSettled(
+        visibleEntries.map((item) => api.getCheckin(authToken, item.entry_id))
+      )
+
+      if (cancelled) {
+        return
+      }
+
+      setHistoryDetails((current) => {
+        const next = { ...current }
+
+        results.forEach((result, index) => {
+          const entryId = visibleEntries[index]?.entry_id
+
+          if (!entryId || result.status !== "fulfilled") {
+            return
+          }
+
+          next[entryId] = result.value
+        })
+
+        return next
+      })
+    }
+
+    void loadVisibleEntryDetails()
+
+    return () => {
+      cancelled = true
+    }
+  }, [history, token])
+
+  useEffect(() => {
+    setWrapupKind(trendsTab === "month" ? "monthly" : "weekly")
+  }, [trendsTab])
 
   async function handlePreview() {
     if (!token || !text.trim()) {
@@ -213,337 +575,514 @@ export default function JournalPage() {
     }
   }
 
+  useEffect(() => {
+    const viewport = threadViewportRef.current
+    const bottom = threadBottomRef.current
+
+    if (!viewport || !bottom) {
+      return
+    }
+
+    bottom.scrollIntoView({ block: "end", behavior: "smooth" })
+  }, [history, preview, text])
+
+  const recentHistory = history.slice(0, 8).reverse()
+  const treeStageLabel =
+    treeScore >= 80 ? "Steady growth" : treeScore >= 55 ? "Growing gently" : "Taking root"
+  const weeklyCheckins = calendar.slice(0, 7).reduce((sum, day) => sum + day.entry_count, 0)
+  const recentStressValues = history
+    .map((item) => item.stress_score)
+    .filter((value): value is number => typeof value === "number")
+    .slice(0, 7)
+  const recentStressAverage =
+    recentStressValues.length > 0
+      ? recentStressValues.reduce((sum, value) => sum + value, 0) / recentStressValues.length
+      : null
+  const recentDays = calendar.slice(0, 7).reverse()
+  const recentEntries = history.slice(0, 4)
+  const rhythmBars7d = recentDays.map((day) => {
+    const emotionLabel =
+      day.primary_emotion_label && isSoulEmotion(day.primary_emotion_label)
+        ? day.primary_emotion_label
+        : null
+    return {
+      label: day.date.slice(5),
+      value: day.entry_count,
+      color: emotionLabel ? getEmotionColor(emotionLabel) : "#DCE6DE",
+    }
+  })
+  const stressPoints7d = recentDays
+    .map((day) => day.average_stress_score)
+    .filter((value): value is number => typeof value === "number")
+  const stressByDay30 = Array.from(
+    history.reduce((accumulator, item) => {
+      if (item.stress_score == null) {
+        return accumulator
+      }
+      const dayKey = item.created_at.slice(0, 10)
+      const current = accumulator.get(dayKey) ?? { total: 0, count: 0 }
+      current.total += item.stress_score
+      current.count += 1
+      accumulator.set(dayKey, current)
+      return accumulator
+    }, new Map<string, { total: number; count: number }>())
+  )
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-10)
+    .map(([, value]) => value.total / value.count)
+  const moodDistribution = Object.entries(summary?.emotion_counts ?? {}).flatMap(
+    ([label, count]) => {
+      if (!isSoulEmotion(label) || count <= 0) {
+        return []
+      }
+
+      return [
+        {
+          label: formatEmotionLabel(label),
+          value: count,
+          color: getEmotionColor(label),
+        },
+      ]
+    }
+  )
+
   return (
-    <section className="space-y-5 p-4 md:p-6">
-      <div className="rounded-[2rem] border border-white/45 bg-gradient-to-br from-[#A8C3D8]/16 via-white/44 to-[#7E9F8B]/14 p-6">
-        <p className="text-sm uppercase tracking-[0.3em] text-[#7E9F8B]">
-          Journal
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold text-[#2F3E36]">
-          A quiet place to check in with yourself
-        </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-7 text-[#2F3E36]/72">
-          Start with what feels most present right now. Your recent reflections
-          and longer patterns sit nearby when you want perspective, not pressure.
-        </p>
-      </div>
-
-      <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              Today&apos;s check-in
+    <section className="min-h-[calc(100vh-7.5rem)] p-3 md:p-5">
+      <div className="mx-auto grid max-w-[1280px] gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(0,0.75fr)] xl:items-start">
+        <div className="order-2 space-y-4">
+          <div className="rounded-[1.45rem] border border-white/28 bg-white/18 p-4">
+            <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#7E9F8B]">
+              Companion
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
-              Write what this moment feels like
-            </h2>
-            <p className="mt-3 text-sm leading-7 text-[#2F3E36]/70">
-              You can preview the reflection first, then save it when it feels right.
-            </p>
-          </div>
-          <span className="rounded-full bg-white/58 px-4 py-2 text-sm text-[#2F3E36]/68">
-            Text journaling first
-          </span>
-        </div>
-
-        <textarea
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value)
-            setPreview(null)
-          }}
-          className="mt-5 min-h-44 w-full rounded-[1.6rem] border border-white/50 bg-[#FDFBF7]/78 p-5 text-sm leading-7 text-[#2F3E36] outline-none"
-          placeholder="Write what today felt like..."
-        />
-
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => void handlePreview()}
-            disabled={isPreviewing || isSubmitting || text.trim().length === 0}
-            className="rounded-full border border-white/50 bg-white/48 px-5 py-2.5 text-sm text-[#2F3E36] transition-colors hover:bg-white/72 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isPreviewing ? "Preparing preview..." : "Preview reflection"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={isSubmitting || text.trim().length === 0}
-            className="rounded-full bg-[#7E9F8B] px-5 py-2.5 text-sm text-white transition-colors hover:bg-[#6D8D7A] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Saving..." : "Save check-in"}
-          </button>
-        </div>
-
-        {pageError ? (
-          <p className="mt-4 rounded-[1rem] bg-[#F7E9E2] px-4 py-3 text-sm text-[#8b4e3d]">
-            {pageStatus === "error"
-              ? pageError
-              : `Some parts of your journal are unavailable right now: ${pageError}`}
-          </p>
-        ) : null}
-
-        {preview ? (
-          <div className="mt-5 rounded-[1.6rem] border border-white/45 bg-[#FDFBF7]/72 p-5">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[#2F3E36]/62">
-              <span className="rounded-full bg-white/75 px-3 py-1">
-                {normalizeLabel(preview.emotion_analysis.primary_label)}
-              </span>
-              <span className="rounded-full bg-white/75 px-3 py-1">
-                stress {formatPercent(preview.emotion_analysis.stress_score)}
-              </span>
-              {preview.topic_tags.slice(0, 4).map((tag) => (
-                <span key={tag} className="rounded-full bg-white/75 px-3 py-1">
-                  {tag}
-                </span>
-              ))}
+            <div className="mt-3 rounded-[1.35rem] bg-[radial-gradient(circle_at_top,rgba(168,195,216,0.22),rgba(253,251,247,0.94),rgba(126,159,139,0.1))] p-3">
+              <DeferredSoulTree
+                emotion={currentMood}
+                score={treeScore}
+                deferMs={120}
+                className="h-56 rounded-[1.2rem] border-0 bg-transparent shadow-none"
+              />
             </div>
-
-            <p className="mt-4 text-lg leading-8 font-medium text-[#2F3E36]">
-              {preview.ai_response}
-            </p>
-
-            {preview.follow_up_question ? (
-              <p className="mt-4 text-sm leading-7 text-[#2F3E36]/70">
-                Consider next: {preview.follow_up_question}
-              </p>
-            ) : null}
-
-            {preview.gentle_suggestion ? (
-              <p className="mt-2 text-sm leading-7 text-[#2F3E36]/70">
-                Gentle support: {preview.gentle_suggestion}
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <div className="mt-5 rounded-[1.5rem] border border-dashed border-white/50 bg-white/24 p-4 text-sm leading-6 text-[#2F3E36]/64">
-            Preview a reflection when you want a gentle read on what you&apos;ve written before saving it.
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-5">
-          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-                  Recent reflections
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
-                  A readable history of what you&apos;ve been carrying
-                </h2>
-              </div>
-              <span className="rounded-full bg-white/58 px-4 py-2 text-sm text-[#2F3E36]/68">
-                {history.length} saved
+            <div className="mt-4 flex flex-wrap gap-2 text-xs text-[#2F3E36]/66">
+              <span className="rounded-full bg-white/70 px-3 py-1.5">
+                {formatEmotionLabel(currentMood)}
+              </span>
+              <span className="rounded-full bg-white/70 px-3 py-1.5">
+                {treeStageLabel}
+              </span>
+              <span className="rounded-full bg-white/70 px-3 py-1.5">
+                {Math.round(treeScore)}/100
               </span>
             </div>
-
-            <div className="mt-5 space-y-4">
-              {pageStatus === "loading" ? (
-                <p className="text-sm leading-6 text-[#2F3E36]/68">
-                  Loading your recent reflections...
-                </p>
-              ) : history.length === 0 ? (
-                <p className="rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
-                  Your first saved check-in will appear here with the feeling it carried and the response it received.
-                </p>
-              ) : (
-                history.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-[1.5rem] border border-white/45 bg-[#FDFBF7]/74 p-5"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-white/80 px-3 py-1 text-xs text-[#2F3E36]/68">
-                          {normalizeLabel(item.primary_label)}
-                        </span>
-                        {item.stress_score != null ? (
-                          <span className="rounded-full bg-white/80 px-3 py-1 text-xs text-[#2F3E36]/68">
-                            stress {formatPercent(item.stress_score)}
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="text-xs text-[#2F3E36]/56">
-                        {formatDateTime(item.created_at)}
-                      </p>
-                    </div>
-
-                    <p className="mt-4 text-sm leading-7 text-[#2F3E36]/76">
-                      {item.transcript_excerpt ||
-                        "A reflection was saved for this moment."}
-                    </p>
-
-                    <div className="mt-4 rounded-[1.25rem] bg-white/72 px-4 py-3">
-                      <p className="text-xs uppercase tracking-[0.2em] text-[#7E9F8B]">
-                        Response
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-[#2F3E36]/68">
-                        {item.ai_response_excerpt ||
-                          "A supportive response was saved with this entry."}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            <p className="mt-3 text-sm leading-6 text-[#2F3E36]/62">
+              A quiet visual marker of how the conversation has been unfolding.
+            </p>
           </div>
-        </div>
 
-        <div className="space-y-5">
-          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
+          <div className="rounded-[1.45rem] border border-white/28 bg-white/12 p-4">
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-                  Wrapup
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
-                  Your latest {wrapupKind} reflection
-                </h2>
-              </div>
+              <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#7E9F8B]">
+                Trends
+              </p>
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setWrapupKind("weekly")}
+                  onClick={() => setTrendsTab("7d")}
                   className={`rounded-full px-3 py-1.5 text-xs ${
-                    wrapupKind === "weekly"
+                    trendsTab === "7d"
                       ? "bg-[#7E9F8B] text-white"
-                      : "bg-white/58 text-[#2F3E36]/70"
+                      : "bg-white/60 text-[#2F3E36]/66"
                   }`}
                 >
-                  Weekly
+                  7D
                 </button>
                 <button
                   type="button"
-                  onClick={() => setWrapupKind("monthly")}
+                  onClick={() => setTrendsTab("30d")}
                   className={`rounded-full px-3 py-1.5 text-xs ${
-                    wrapupKind === "monthly"
+                    trendsTab === "30d"
                       ? "bg-[#7E9F8B] text-white"
-                      : "bg-white/58 text-[#2F3E36]/70"
+                      : "bg-white/60 text-[#2F3E36]/66"
                   }`}
                 >
-                  Monthly
+                  30D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendsTab("month")}
+                  className={`rounded-full px-3 py-1.5 text-xs ${
+                    trendsTab === "month"
+                      ? "bg-[#7E9F8B] text-white"
+                      : "bg-white/60 text-[#2F3E36]/66"
+                  }`}
+                >
+                  Month
                 </button>
               </div>
             </div>
 
-            {wrapup ? (
-              <div className="mt-5 space-y-4">
-                <p className="text-sm leading-7 text-[#2F3E36]/74">
-                  {wrapup.payload.summary_text || wrapup.payload.closing_message}
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  <div className="rounded-[1.25rem] bg-[#FDFBF7]/74 p-4">
-                    <p className="text-xs uppercase tracking-[0.24em] text-[#7E9F8B]">
-                      Period
-                    </p>
-                    <p className="mt-2 text-sm text-[#2F3E36]">
-                      {wrapup.payload.period_start} to {wrapup.payload.period_end}
-                    </p>
+            <div className="mt-4 space-y-4">
+              {trendsTab === "7d" ? (
+                <>
+                  <div className="rounded-[1.15rem] bg-[#FDFBF7]/44 p-4">
+                    <p className="text-sm font-medium text-[#2F3E36]">7-day check-in rhythm</p>
+                    <div className="mt-4">
+                      <MiniBarChart items={rhythmBars7d} />
+                    </div>
                   </div>
-                  <div className="rounded-[1.25rem] bg-[#FDFBF7]/74 p-4">
-                    <p className="text-xs uppercase tracking-[0.24em] text-[#7E9F8B]">
-                      High stress
-                    </p>
-                    <p className="mt-2 text-sm text-[#2F3E36]">
-                      {formatPercent(wrapup.payload.high_stress_frequency)}
-                    </p>
+                  <div className="rounded-[1.15rem] bg-[#FDFBF7]/44 p-4">
+                    <p className="text-sm font-medium text-[#2F3E36]">Recent stress shape</p>
+                    <div className="mt-3">
+                      <MiniSparkline points={stressPoints7d} />
+                    </div>
                   </div>
-                </div>
+                </>
+              ) : null}
 
-                {wrapup.payload.insight_cards.slice(0, 2).map((card) => (
-                  <div
-                    key={`${card.kind}-${card.title}`}
-                    className="rounded-[1.25rem] bg-[#FDFBF7]/74 p-4"
-                  >
-                    <p className="text-sm font-medium text-[#2F3E36]">
-                      {card.title}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-[#2F3E36]/70">
-                      {card.summary}
-                    </p>
+              {trendsTab === "30d" ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full bg-white/68 px-3 py-1.5 text-xs text-[#2F3E36]/70">
+                      {summary?.total_entries ?? 0} check-ins
+                    </span>
+                    <span className="rounded-full bg-white/68 px-3 py-1.5 text-xs text-[#2F3E36]/70">
+                      {summary?.emotional_direction_trend ?? "mixed"}
+                    </span>
+                    <span className="rounded-full bg-white/68 px-3 py-1.5 text-xs text-[#2F3E36]/70">
+                      {summary ? formatPercent(summary.high_stress_frequency) : "n/a"} high stress
+                    </span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-5 rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
-                A wrapup will appear here once enough recent check-ins have been gathered.
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
-            <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              Recent patterns
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
-              What your last 30 days suggest
-            </h2>
-
-            {summary ? (
-              <div className="mt-5 space-y-4">
-                <p className="text-sm leading-7 text-[#2F3E36]/74">
-                  {summary.summary_text || "More summary details will appear here as you keep checking in."}
-                </p>
-                <div className="flex flex-wrap gap-2 text-xs text-[#2F3E36]/68">
-                  <span className="rounded-full bg-[#FDFBF7]/74 px-3 py-1">
-                    {summary.total_entries} entries
-                  </span>
-                  <span className="rounded-full bg-[#FDFBF7]/74 px-3 py-1">
-                    {formatPercent(summary.high_stress_frequency)} high stress
-                  </span>
-                  <span className="rounded-full bg-[#FDFBF7]/74 px-3 py-1">
-                    {summary.emotional_direction_trend}
-                  </span>
-                </div>
-                {summary.recurring_triggers.slice(0, 3).map((trigger) => (
-                  <p
-                    key={trigger}
-                    className="rounded-[1.1rem] bg-[#FDFBF7]/74 px-4 py-3 text-sm leading-6 text-[#2F3E36]/68"
-                  >
-                    {trigger}
+                  <div className="rounded-[1.15rem] bg-[#FDFBF7]/44 p-4">
+                    <p className="text-sm font-medium text-[#2F3E36]">30-day stress trend</p>
+                    <div className="mt-3">
+                      <MiniSparkline points={stressByDay30} />
+                    </div>
+                  </div>
+                  <p className="text-sm leading-6 text-[#2F3E36]/64">
+                    {summary?.summary_text
+                      ? summary.summary_text.split(".")[0]
+                      : "A longer-view pattern will appear here as your check-ins collect over time."}
                   </p>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-5 rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
-                Your longer-view patterns will appear here after more check-ins are saved.
-              </p>
-            )}
+                </>
+              ) : null}
+
+              {trendsTab === "month" ? (
+                <>
+                  <div className="rounded-[1.15rem] bg-[#FDFBF7]/44 p-4">
+                    <p className="text-sm font-medium text-[#2F3E36]">Monthly mood distribution</p>
+                    <div className="mt-4">
+                      <MiniStackedBar items={moodDistribution} />
+                    </div>
+                  </div>
+                  <div className="rounded-[1.15rem] bg-[#FDFBF7]/44 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-[#2F3E36]">Monthly reflection</p>
+                      <span className="rounded-full bg-white/70 px-3 py-1 text-[0.68rem] text-[#2F3E36]/62">
+                        {wrapup ? formatPercent(wrapup.payload.high_stress_frequency) : "n/a"}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[#2F3E36]/64">
+                      {wrapup?.payload.summary_text
+                        ? wrapup.payload.summary_text.split(".")[0]
+                        : "A monthly reflection will appear here once enough check-ins have been saved."}
+                    </p>
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
 
-          <div className="rounded-[2rem] border border-white/45 bg-white/40 p-6">
-            <p className="text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
-              Recent check-in days
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-[#2F3E36]">
-              A gentle view of recent rhythm
-            </h2>
+          <div className="rounded-[1.45rem] border border-white/28 bg-white/12 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#7E9F8B]">
+                Past conversations
+              </p>
+              <button
+                type="button"
+                onClick={() => setArchiveOpen((current) => !current)}
+                className="rounded-full bg-white/56 px-3 py-1.5 text-xs text-[#2F3E36]/62"
+              >
+                {archiveOpen ? "Hide" : "Open"}
+              </button>
+            </div>
 
-            <div className="mt-5 space-y-3">
-              {calendar.length === 0 ? (
-                <p className="rounded-[1.5rem] border border-dashed border-white/45 bg-white/24 p-5 text-sm leading-6 text-[#2F3E36]/68">
-                  Recent days will show up here once you&apos;ve checked in.
+            <div className="mt-4 space-y-3">
+              {recentEntries.length === 0 ? (
+                <p className="rounded-[1.2rem] border border-dashed border-white/40 bg-white/18 p-4 text-sm leading-6 text-[#2F3E36]/64">
+                  Past conversations will appear here after you save a few check-ins.
                 </p>
               ) : (
-                calendar.slice(0, 6).map((day) => (
+                recentEntries.map((item) => (
                   <div
-                    key={day.date}
-                    className="flex items-center justify-between gap-3 rounded-[1.25rem] bg-[#FDFBF7]/74 p-4"
+                    key={item.id}
+                    className="rounded-[1.1rem] bg-[#FDFBF7]/44 px-3 py-3"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-[#2F3E36]">{day.date}</p>
-                      <p className="mt-1 text-xs text-[#2F3E36]/62">
-                        {normalizeLabel(day.primary_emotion_label)} · {day.entry_count} entries
-                      </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-white/72 px-2.5 py-1 text-[0.68rem] text-[#2F3E36]/68">
+                        {normalizeLabel(item.primary_label)}
+                      </span>
+                      <span className="text-[0.68rem] text-[#2F3E36]/42">
+                        {formatDateTime(item.created_at)}
+                      </span>
                     </div>
-                    <span className="rounded-full bg-white/75 px-3 py-1 text-xs text-[#2F3E36]/72">
-                      {formatPercent(day.average_stress_score)} stress
-                    </span>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#2F3E36]/70">
+                      {item.transcript_excerpt || item.ai_response_excerpt || "Saved reflection"}
+                    </p>
                   </div>
                 ))
               )}
+
+              {archiveOpen ? (
+                <div className="border-t border-white/40 pt-3">
+                  <div className="flex flex-wrap gap-2">
+                    {conversationSessions.length === 0 ? (
+                      <p className="rounded-[1rem] border border-dashed border-white/40 bg-white/18 p-3 text-sm leading-6 text-[#2F3E36]/64">
+                        Saved voice conversations will appear here after you use the mic.
+                      </p>
+                    ) : (
+                      conversationSessions.map((session) => (
+                        <button
+                          key={session.id}
+                          type="button"
+                          onClick={() => setSelectedConversationId(session.id)}
+                          className={`rounded-full px-3 py-1.5 text-xs ${
+                            selectedConversationId === session.id
+                              ? "bg-[#7E9F8B] text-white"
+                              : "bg-white/56 text-[#2F3E36]/70"
+                          }`}
+                        >
+                          {formatDateTime(session.started_at)}
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {selectedConversationId ? (
+                    <div className="mt-3 rounded-[1.1rem] border border-white/34 bg-[#F8F5EE]/36 p-3">
+                      <div className="space-y-3">
+                        {conversationStatus === "loading" ? (
+                          <p className="text-sm leading-6 text-[#2F3E36]/66">
+                            Loading this conversation...
+                          </p>
+                        ) : conversationStatus === "error" ? (
+                          <p className="text-sm leading-6 text-[#8b4e3d]">
+                            This saved conversation could not be loaded right now.
+                          </p>
+                        ) : selectedConversationTurns.length === 0 ? (
+                          <p className="text-sm leading-6 text-[#2F3E36]/66">
+                            No saved turns were returned for this conversation.
+                          </p>
+                        ) : (
+                          selectedConversationTurns.map((turn) => (
+                            <ThreadBubble
+                              key={turn.id}
+                              align={turn.role === "user" ? "right" : "left"}
+                              badge={turn.role === "user" ? "You" : "Companion"}
+                              text={turn.text}
+                              timestamp={
+                                turn.role === "user"
+                                  ? formatDateTime(turn.created_at)
+                                  : null
+                              }
+                            />
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="order-1">
+          <div className="flex min-h-[78vh] flex-col overflow-hidden rounded-[1.85rem] border border-white/45 bg-white/58 shadow-[0_30px_80px_rgba(73,87,81,0.14)] xl:h-[calc(100vh-7rem)]">
+            <div className="border-b border-white/50 px-5 py-4 md:px-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-md">
+                  <p className="text-xs uppercase tracking-[0.24em] text-[#7E9F8B]">
+                    Today&apos;s conversation
+                  </p>
+                  <h2 className="mt-2 text-lg font-semibold text-[#2F3E36]">
+                    Send a message
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[#2F3E36]/58">
+                    The conversation stays central. Mood stays in the background.
+                  </p>
+                </div>
+                <div className="rounded-full bg-[#FDFBF7]/82 px-3 py-1.5 text-xs text-[#2F3E36]/60">
+                  {history.length} exchanges
+                </div>
+              </div>
+
+              {pageError ? (
+                <p className="mt-4 rounded-[1rem] bg-[#F7E9E2] px-4 py-3 text-sm text-[#8b4e3d]">
+                  {pageStatus === "error"
+                    ? pageError
+                    : `Some parts of this space are unavailable right now: ${pageError}`}
+                </p>
+              ) : null}
+            </div>
+
+            <div
+              ref={threadViewportRef}
+              className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,245,238,0.76),rgba(255,255,255,0.44))] px-4 py-4 md:px-5"
+            >
+              <div className="space-y-4">
+                {pageStatus === "loading" && recentHistory.length === 0 && !preview ? (
+                  <div className="rounded-[1.5rem] border border-dashed border-white/45 bg-white/32 p-5 text-sm leading-6 text-[#2F3E36]/68">
+                    Loading your recent check-ins...
+                  </div>
+                ) : recentHistory.length === 0 && !preview ? (
+                  <div className="rounded-[1.5rem] border border-dashed border-white/45 bg-white/32 p-5 text-sm leading-6 text-[#2F3E36]/68">
+                    Begin with a few lines. Your message and the reflection it receives will appear here in one conversation thread.
+                  </div>
+                ) : null}
+
+                {recentHistory.map((item, index, items) => {
+                  const currentLabel = formatRelativeDateLabel(item.created_at)
+                  const previousLabel =
+                    index > 0 ? formatRelativeDateLabel(items[index - 1]?.created_at) : null
+                  const showSeparator = index === 0 || currentLabel !== previousLabel
+                  const detail = historyDetails[item.entry_id]
+                  const transcriptText = detail?.transcript_text || item.transcript_excerpt
+                  const assistantResponse = detail?.ai_response || item.ai_response_excerpt
+                  const isTranscriptExcerptFallback =
+                    !detail?.transcript_text && Boolean(item.transcript_excerpt)
+                  const isResponseExcerptFallback =
+                    !detail?.ai_response && Boolean(item.ai_response_excerpt)
+
+                  return (
+                    <div key={item.id} className="space-y-2.5">
+                      {showSeparator ? (
+                        <div className="flex items-center gap-3 py-1">
+                          <div className="h-px flex-1 bg-white/55" />
+                          <p className="text-[0.68rem] uppercase tracking-[0.22em] text-[#2F3E36]/42">
+                            {currentLabel}
+                          </p>
+                          <div className="h-px flex-1 bg-white/55" />
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-2">
+                        {transcriptText ? (
+                          <ThreadBubble
+                            align="right"
+                            badge="You"
+                            text={transcriptText}
+                            note={isTranscriptExcerptFallback ? "Saved message excerpt" : null}
+                            timestamp={formatDateTime(item.created_at)}
+                          />
+                        ) : null}
+
+                        {assistantResponse ? (
+                          <ThreadBubble
+                            badge="Companion"
+                            meta={
+                              index === 0
+                                ? `${normalizeLabel(item.primary_label)}${
+                                    item.stress_score != null
+                                      ? ` · stress ${formatPercent(item.stress_score)}`
+                                      : ""
+                                  }`
+                                : normalizeLabel(item.primary_label)
+                            }
+                            text={assistantResponse}
+                            note={isResponseExcerptFallback ? "Saved response excerpt" : null}
+                            footer={
+                              detail?.follow_up_question || detail?.gentle_suggestion ? (
+                                <>
+                                  {detail.follow_up_question ? (
+                                    <p className="text-[#2F3E36]/66">
+                                      {detail.follow_up_question}
+                                    </p>
+                                  ) : null}
+                                  {detail.gentle_suggestion ? (
+                                    <p className="text-xs tracking-[0.02em] text-[#6A8375]">
+                                      {detail.gentle_suggestion}
+                                    </p>
+                                  ) : null}
+                                </>
+                              ) : null
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {preview && text.trim() ? (
+                  <div className="space-y-2.5 rounded-[1.4rem] border border-dashed border-[#C9D6C8] bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(248,245,238,0.88))] px-3 py-3 shadow-[0_10px_24px_rgba(126,159,139,0.08)] sm:px-4">
+                    <ThreadBubble
+                      align="right"
+                      badge="Current message"
+                      text={text.trim()}
+                    />
+                    <ThreadBubble
+                      badge="Companion"
+                      meta={`${normalizeLabel(preview.emotion_analysis.primary_label)}${
+                        preview.emotion_analysis.stress_score != null
+                          ? ` · stress ${formatPercent(preview.emotion_analysis.stress_score)}`
+                          : ""
+                      }`}
+                      text={preview.ai_response}
+                      footer={
+                        <>
+                          {preview.follow_up_question ? (
+                            <p className="text-[#2F3E36]/66">
+                              {preview.follow_up_question}
+                            </p>
+                          ) : null}
+                          {preview.gentle_suggestion ? (
+                            <p className="text-xs tracking-[0.02em] text-[#6A8375]">
+                              {preview.gentle_suggestion}
+                            </p>
+                          ) : null}
+                        </>
+                      }
+                    />
+                  </div>
+                ) : null}
+                <div ref={threadBottomRef} />
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 border-t border-white/50 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(253,251,247,0.98))] px-4 py-4 backdrop-blur-sm md:px-5">
+              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-[#7E9F8B]/78">
+                Your next turn
+              </p>
+              <textarea
+                value={text}
+                onChange={(event) => {
+                  setText(event.target.value)
+                  setPreview(null)
+                }}
+                className="mt-3 min-h-28 w-full rounded-[1.35rem] border border-white/50 bg-white/82 p-4 text-sm leading-7 text-[#2F3E36] outline-none"
+                placeholder="Write what today feels like..."
+              />
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handlePreview()}
+                  disabled={isPreviewing || isSubmitting || text.trim().length === 0}
+                  className="rounded-full border border-white/50 bg-white/62 px-5 py-2.5 text-sm text-[#2F3E36] transition-colors hover:bg-white/82 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPreviewing ? "Preparing reflection..." : "Reflect first"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSubmit()}
+                  disabled={isSubmitting || text.trim().length === 0}
+                  className="rounded-full bg-[#7E9F8B] px-5 py-2.5 text-sm text-white transition-colors hover:bg-[#6D8D7A] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting ? "Saving..." : "Save this exchange"}
+                </button>
+                <span className="text-sm text-[#2F3E36]/50">
+                  Prefer speaking? Use the mic for the same flow.
+                </span>
+              </div>
             </div>
           </div>
         </div>

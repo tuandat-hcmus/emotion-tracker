@@ -129,7 +129,7 @@ export default function LoginPage() {
           disabled={isSubmitting}
           className="h-12 w-full rounded-full border-0 bg-[#7E9F8B] text-white hover:bg-[#5C7D69]"
         >
-          {isSubmitting ? "Entering your flow..." : "Sign in"}
+          {isSubmitting ? "Signing in..." : "Sign in"}
           <HugeiconsIcon
             icon={ArrowRight01Icon}
             size={16}

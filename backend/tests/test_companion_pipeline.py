@@ -208,6 +208,40 @@ def test_build_support_package_exposes_shared_companion_fields(monkeypatch) -> N
     assert payload["response_plan"]["normalized_state"]["event_type"] == "deadline_pressure"
 
 
+def test_build_companion_pipeline_shapes_other_person_concern_plan() -> None:
+    emotion_analysis = {
+        "language": "en",
+        "primary_emotion": "sadness",
+        "secondary_emotions": ["neutral"],
+        "emotion_label": "sadness",
+        "valence_score": -0.44,
+        "energy_score": 0.22,
+        "stress_score": 0.28,
+        "social_need_score": 0.12,
+        "confidence": 0.66,
+        "dominant_signals": ["sadness_weight"],
+        "response_mode": "low_energy_comfort",
+        "source": "text",
+        "raw_model_labels": ["sadness"],
+        "provider_name": "test-model",
+        "source_metadata": {"mode": "test"},
+    }
+
+    result = build_companion_pipeline(
+        transcript="My friend Minh seems sad now.",
+        emotion_analysis=emotion_analysis,
+        topic_tags=["relationships"],
+        risk_level="low",
+    )
+
+    assert result.render_context.user_stance == "worried_about_other"
+    assert result.support_strategy.support_focus == "relationship"
+    assert result.response_plan["acknowledgment_focus"] == "care_for_other"
+    assert result.response_plan["suggestion_allowed"] is False
+    assert result.response_plan["follow_up_question_allowed"] is True
+    assert result.response_plan["response_variant"] == "empathy_plus_followup"
+
+
 def test_noop_memory_store_is_safe_for_production_wiring() -> None:
     store = get_noop_memory_store()
     state = _sample_state()

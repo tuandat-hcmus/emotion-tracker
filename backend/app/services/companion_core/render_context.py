@@ -8,7 +8,7 @@ def _dedupe(items: list[str]) -> list[str]:
 
 
 _NAMED_TARGET_RE = re.compile(
-    r"^\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+(?:seems|looks|is)\s+(?:sad|angry|upset|mad|hurt|ill|sick)\b"
+    r"^\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+(?:seems|looks|is)\s+(?:sad|angry|upset|mad|hurt|ill|sick|stressed|anxious|overwhelmed|down)\b"
 )
 
 
@@ -94,7 +94,21 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
         "missed deadline",
     )
     mixed_terms = ("at the same time", "weirdly", "not sure", "mixed", "both", "part of me")
-    other_person_state_terms = ("angry", "upset", "sad", "crying", "mad", "sick", "ill", "hurt")
+    other_person_state_terms = (
+        "angry",
+        "upset",
+        "sad",
+        "crying",
+        "mad",
+        "sick",
+        "ill",
+        "hurt",
+        "stressed",
+        "stress",
+        "anxious",
+        "overwhelmed",
+        "down",
+    )
     distress_terms = (
         "i feel",
         "i've been",
