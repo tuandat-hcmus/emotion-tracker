@@ -35,6 +35,8 @@ Create `.env` with:
 
 ```env
 VITE_API_BASE_URL=http://127.0.0.1:8000
+# Optional: force local fallback mode even if the backend is unavailable
+# VITE_ENABLE_API_FALLBACK=true
 ```
 
 ## Available Scripts
@@ -50,3 +52,6 @@ npm run typecheck
 - the frontend expects the backend to be available at the URL in `VITE_API_BASE_URL`
 - auth, dashboard hydration, journal, wrapups, and realtime conversation all depend on the backend
 - if the browser shows CORS errors on login or register, update `BACKEND_CORS_ORIGINS` in `backend/.env` and restart the backend
+- temporary fallback data is available for login, dashboard, journal, history, calendar, wrapups, and text check-ins when the backend cannot be reached
+- fallback mode creates a local demo account from the email you sign in with and persists its data in browser local storage
+- realtime voice conversation still requires the backend websocket and is not covered by fallback mode

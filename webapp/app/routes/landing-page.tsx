@@ -64,7 +64,7 @@ export default function LandingPage() {
       <div className="pointer-events-none fixed inset-0">
         <div className="absolute left-[-8rem] top-[-5rem] h-80 w-80 rounded-full bg-[#EAD2AC]/40 blur-3xl" />
         <div className="absolute right-[-7rem] top-20 h-[28rem] w-[28rem] rounded-full bg-[#A8C3D8]/26 blur-3xl" />
-        <div className="absolute bottom-[-7rem] left-1/3 h-96 w-96 rounded-full bg-[#7E9F8B]/18 blur-3xl" />
+        <div className="absolute bottom-[-7rem] left-1/3 h-96 w-96 rounded-full bg-[var(--brand-primary)]/18 blur-3xl" />
       </div>
 
       <header className="fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6 lg:px-8">
@@ -83,7 +83,7 @@ export default function LandingPage() {
               </Link>
               <Button
                 asChild
-                className="h-11 rounded-full border-0 bg-[#7E9F8B] px-5 text-sm text-white hover:bg-[#5C7D69]"
+                className="h-11 rounded-full border-0 bg-[var(--brand-primary)] px-5 text-sm text-[var(--brand-on-primary)] hover:bg-[var(--brand-primary-strong)]"
               >
                 <Link to="/register">Start journaling</Link>
               </Button>
@@ -120,7 +120,7 @@ export default function LandingPage() {
                 <Button
                   asChild
                   size="lg"
-                  className="h-12 rounded-full border-0 bg-[#7E9F8B] px-6 text-sm text-white hover:bg-[#5C7D69]"
+                  className="h-12 rounded-full border-0 bg-[var(--brand-primary)] px-6 text-sm text-[var(--brand-on-primary)] hover:bg-[var(--brand-primary-strong)]"
                 >
                   <Link to="/register">
                     Start journaling
@@ -172,7 +172,7 @@ export default function LandingPage() {
 
         <section id="how-it-works" className="py-24">
           <motion.div {...fadeUp} className="mx-auto max-w-3xl text-center">
-            <p className="text-xs uppercase tracking-[0.32em] text-[#7E9F8B]">
+            <p className="text-xs uppercase tracking-[0.32em] text-[var(--brand-primary-muted)]">
               How it works
             </p>
             <h2
@@ -199,10 +199,10 @@ export default function LandingPage() {
                 }}
                 className="rounded-3xl border border-white/40 bg-white/40 p-6 shadow-sm backdrop-blur-md"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7E9F8B]/12 text-[#7E9F8B]">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand-primary)]/12 text-[var(--brand-primary-muted)]">
                   <HugeiconsIcon icon={step.icon} size={20} strokeWidth={1.8} />
                 </div>
-                <p className="mt-6 text-xs uppercase tracking-[0.28em] text-[#7E9F8B]">
+                <p className="mt-6 text-xs uppercase tracking-[0.28em] text-[var(--brand-primary-muted)]">
                   {step.eyebrow}
                 </p>
                 <h3 className="mt-3 text-2xl font-semibold text-[#2F3E36]">
@@ -222,7 +222,7 @@ export default function LandingPage() {
             className="rounded-[2rem] bg-[#A8C3D8]/10 px-6 py-10 sm:px-8"
           >
             <div className="mx-auto max-w-3xl text-center">
-              <p className="text-xs uppercase tracking-[0.32em] text-[#7E9F8B]">
+              <p className="text-xs uppercase tracking-[0.32em] text-[var(--brand-primary-muted)]">
                 Daily grounding quotes
               </p>
               <h2
@@ -244,7 +244,7 @@ export default function LandingPage() {
                   }}
                   className="rounded-3xl border border-white/40 bg-white/50 p-5 shadow-sm backdrop-blur-md"
                 >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FDFBF7] text-[#7E9F8B]">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FDFBF7] text-[var(--brand-primary-muted)]">
                     <HugeiconsIcon
                       icon={QuoteUpIcon}
                       size={18}
@@ -278,7 +278,7 @@ export default function LandingPage() {
             <Button
               asChild
               size="lg"
-              className="mt-8 h-14 rounded-full border-0 bg-[#7E9F8B] px-8 text-sm text-white shadow-[0_18px_42px_rgba(126,159,139,0.24)] hover:bg-[#5C7D69]"
+              className="mt-8 h-14 rounded-full border-0 bg-[var(--brand-primary)] px-8 text-sm text-[var(--brand-on-primary)] shadow-[0_18px_42px_rgba(18,199,127,0.24)] hover:bg-[var(--brand-primary-strong)]"
             >
               <Link to="/register">Start Your Journal</Link>
             </Button>

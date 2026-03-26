@@ -2,6 +2,7 @@ import {
   ArrowRight01Icon,
   LockPasswordIcon,
   Mail01Icon,
+  UserIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useState, type FormEvent } from "react"
@@ -36,19 +37,31 @@ function InputFrame({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function LoginPage() {
-  const { login } = useAuth()
+export default function RegisterPage() {
+  const { register } = useAuth()
   const navigate = useNavigate()
+  const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (!email.trim() || !password.trim()) {
-      setError("Please enter both email and password.")
+    if (
+      !fullName.trim() ||
+      !email.trim() ||
+      !password.trim() ||
+      !confirmPassword.trim()
+    ) {
+      setError("Please complete all fields before creating your account.")
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match yet.")
       return
     }
 
@@ -56,13 +69,17 @@ export default function LoginPage() {
     setIsSubmitting(true)
 
     try {
-      await login(email.trim(), password)
+      await register({
+        display_name: fullName.trim(),
+        email: email.trim(),
+        password,
+      })
       navigate("/app/home")
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "Unable to sign in right now."
+          : "Unable to create your account right now."
       )
     } finally {
       setIsSubmitting(false)
@@ -71,24 +88,42 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      eyebrow="Welcome back"
-      title="Sign in and keep going."
-      description="Pick up your journal where you left off."
-      helperLink={{ label: "Need an account?", to: "/register" }}
-      highlights={["Private journal", "Gentle reflection", "Daily clarity"]}
+      eyebrow="Begin your flow"
+      title="Create your account."
+      description="Start your journal in under a minute."
+      helperLink={{ label: "Already have an account?", to: "/login" }}
+      highlights={["Private by default", "Text journaling", "Gentle support"]}
     >
-      <p className="text-xs tracking-[0.32em] text-[#7E9F8B] uppercase">
-        Sign in
+      <p className="text-xs tracking-[0.32em] text-[var(--brand-primary-muted)] uppercase">
+        Register
       </p>
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        <Field label="Full name">
+          <InputFrame>
+            <HugeiconsIcon
+              icon={UserIcon}
+              size={18}
+              strokeWidth={1.8}
+              className="text-[var(--brand-primary-muted)]"
+            />
+            <input
+              type="text"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder="Your name"
+              className="w-full bg-transparent text-sm text-[#2F3E36] outline-none placeholder:text-[#2F3E36]/35"
+            />
+          </InputFrame>
+        </Field>
+
         <Field label="Email">
           <InputFrame>
             <HugeiconsIcon
               icon={Mail01Icon}
               size={18}
               strokeWidth={1.8}
-              className="text-[#7E9F8B]"
+              className="text-[var(--brand-primary-muted)]"
             />
             <input
               type="email"
@@ -106,13 +141,31 @@ export default function LoginPage() {
               icon={LockPasswordIcon}
               size={18}
               strokeWidth={1.8}
-              className="text-[#7E9F8B]"
+              className="text-[var(--brand-primary-muted)]"
             />
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Enter your password"
+              placeholder="Create a password"
+              className="w-full bg-transparent text-sm text-[#2F3E36] outline-none placeholder:text-[#2F3E36]/35"
+            />
+          </InputFrame>
+        </Field>
+
+        <Field label="Confirm password">
+          <InputFrame>
+            <HugeiconsIcon
+              icon={LockPasswordIcon}
+              size={18}
+              strokeWidth={1.8}
+              className="text-[var(--brand-primary-muted)]"
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="Repeat your password"
               className="w-full bg-transparent text-sm text-[#2F3E36] outline-none placeholder:text-[#2F3E36]/35"
             />
           </InputFrame>
@@ -127,9 +180,9 @@ export default function LoginPage() {
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="h-12 w-full rounded-full border-0 bg-[#7E9F8B] text-white hover:bg-[#5C7D69]"
+          className="h-12 w-full rounded-full border-0 bg-[var(--brand-primary)] text-[var(--brand-on-primary)] hover:bg-[var(--brand-primary-strong)]"
         >
-          {isSubmitting ? "Signing in..." : "Sign in"}
+          {isSubmitting ? "Creating account..." : "Create account"}
           <HugeiconsIcon
             icon={ArrowRight01Icon}
             size={16}
@@ -140,11 +193,11 @@ export default function LoginPage() {
       </form>
 
       <div className="mt-6 flex items-center justify-between gap-3 text-sm text-[#2F3E36]/64">
-        <Link to="/register" className="transition-colors hover:text-[#2F3E36]">
-          Create a new account
+        <Link to="/login" className="transition-colors hover:text-[#2F3E36]">
+          Already using eFlow?
         </Link>
         <span className="rounded-full bg-white/60 px-4 py-2">
-          Private by default
+          Calm start
         </span>
       </div>
     </AuthShell>

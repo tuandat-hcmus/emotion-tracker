@@ -38,7 +38,7 @@ export function AuthShell({
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-[-8rem] top-[-5rem] h-80 w-80 rounded-full bg-[#EAD2AC]/38 blur-3xl" />
         <div className="absolute right-[-8rem] top-14 h-[28rem] w-[28rem] rounded-full bg-[#A8C3D8]/22 blur-3xl" />
-        <div className="absolute bottom-[-7rem] left-1/3 h-96 w-96 rounded-full bg-[#7E9F8B]/18 blur-3xl" />
+        <div className="absolute bottom-[-7rem] left-1/3 h-96 w-96 rounded-full bg-[var(--brand-primary)]/18 blur-3xl" />
       </div>
 
       <div className="relative mx-auto flex min-h-svh max-w-7xl items-center justify-center px-4 py-4 sm:px-6 lg:px-8">
@@ -63,7 +63,7 @@ export function AuthShell({
           </div>
 
           <div className="mt-6">
-            <p className="text-xs uppercase tracking-[0.32em] text-[#7E9F8B]">
+            <p className="text-xs uppercase tracking-[0.32em] text-[var(--brand-primary-muted)]">
               {eyebrow}
             </p>
             <h1

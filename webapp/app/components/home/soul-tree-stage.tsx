@@ -5,10 +5,10 @@ import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
 function StaticSoulTreeFallback() {
   return (
     <div className="relative flex h-full min-h-[15rem] w-full items-end justify-center overflow-hidden">
-      <div className="absolute bottom-6 h-16 w-40 rounded-full bg-[#7E9F8B]/18 blur-xl" />
+      <div className="absolute bottom-6 h-16 w-40 rounded-full bg-[var(--brand-primary)]/18 blur-xl" />
       <div className="absolute bottom-16 h-28 w-8 rounded-full bg-[#7D5A50]/78" />
       <div className="absolute bottom-[7.5rem] left-1/2 h-20 w-20 -translate-x-[4.5rem] rounded-full bg-[#81B29A]/82 shadow-sm" />
-      <div className="absolute bottom-36 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-[#7E9F8B]/86 shadow-sm" />
+      <div className="absolute bottom-36 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-[var(--brand-primary)]/86 shadow-sm" />
       <div className="absolute bottom-28 left-1/2 h-[4.5rem] w-[4.5rem] translate-x-[3.5rem] rounded-full bg-[#A8C3D8]/78 shadow-sm" />
     </div>
   )
@@ -36,7 +36,7 @@ export function SoulTreeStage() {
       <div className="relative flex min-h-[21rem] flex-col">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs tracking-[0.3em] text-[#7E9F8B] uppercase">
+            <p className="text-xs tracking-[0.3em] text-[var(--brand-primary-muted)] uppercase">
               Soul Tree stage
             </p>
             <h3 className="mt-2 text-xl font-semibold sm:text-2xl">

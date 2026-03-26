@@ -14,6 +14,7 @@ import type {
   UserSummaryResponse,
   WrapupSnapshotResponse,
 } from "~/lib/contracts"
+import { isMockToken, mockApi } from "~/lib/mock-api"
 
 const AUTH_STORAGE_KEY = "emotion-webapp-auth"
 const AUTH_INVALIDATED_EVENT = "emotion-auth-invalidated"
@@ -29,6 +30,8 @@ type ApiErrorPayload = {
   detail?: string
   message?: string
 }
+
+let runtimeMockModeActive = false
 
 export class ApiError extends Error {
   status: number
@@ -47,6 +50,18 @@ export function getApiBaseUrl() {
   )
 }
 
+function isFallbackForced() {
+  return import.meta.env.VITE_ENABLE_API_FALLBACK?.trim() === "true"
+}
+
+function setRuntimeMockModeActive(nextValue: boolean) {
+  runtimeMockModeActive = nextValue
+}
+
+export function isMockApiModeActive(token?: string | null) {
+  return isFallbackForced() || runtimeMockModeActive || isMockToken(token)
+}
+
 export function getWebSocketBaseUrl() {
   const baseUrl = getApiBaseUrl()
 
@@ -62,6 +77,18 @@ export function getWebSocketBaseUrl() {
 }
 
 async function requestJson<T>(path: string, options: RequestOptions = {}) {
+  return requestJsonWithFallback<T>(path, options)
+}
+
+async function requestJsonWithFallback<T>(
+  path: string,
+  options: RequestOptions = {},
+  fallback?: (() => Promise<T> | T) | null
+) {
+  if (fallback && isMockApiModeActive(options.token)) {
+    return await fallback()
+  }
+
   const headers = new Headers(options.headers)
   headers.set("Accept", "application/json")
 
@@ -73,11 +100,22 @@ async function requestJson<T>(path: string, options: RequestOptions = {}) {
     headers.set("Authorization", `Bearer ${options.token}`)
   }
 
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body,
-  })
+  let response: Response
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body,
+    })
+  } catch (error) {
+    if (fallback) {
+      setRuntimeMockModeActive(true)
+      return await fallback()
+    }
+
+    throw error
+  }
 
   if (!response.ok) {
     let payload: ApiErrorPayload | null = null
@@ -106,22 +144,40 @@ export { AUTH_INVALIDATED_EVENT, AUTH_STORAGE_KEY }
 
 export const api = {
   login(email: string, password: string) {
-    return requestJson<LoginResponse>("/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    })
+    return requestJsonWithFallback<LoginResponse>(
+      "/v1/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      },
+      () => {
+        setRuntimeMockModeActive(true)
+        return mockApi.login(email, password)
+      }
+    )
   },
   register(payload: RegisterRequest) {
-    return requestJson("/v1/auth/register", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    })
+    return requestJsonWithFallback(
+      "/v1/auth/register",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      () => {
+        setRuntimeMockModeActive(true)
+        return mockApi.register(payload)
+      }
+    )
   },
   getAuthMe(token: string) {
-    return requestJson<AuthUser>("/v1/auth/me", { token })
+    return requestJsonWithFallback<AuthUser>("/v1/auth/me", { token }, () =>
+      mockApi.getAuthMe(token)
+    )
   },
   getHome(token: string) {
-    return requestJson<HomeResponse>("/v1/me/home", { token })
+    return requestJsonWithFallback<HomeResponse>("/v1/me/home", { token }, () =>
+      mockApi.getHome(token)
+    )
   },
   createTextCheckin(
     token: string,
@@ -130,39 +186,61 @@ export const api = {
       session_type?: string
     }
   ) {
-    return requestJson<CheckinDetail>("/v1/checkins/text", {
-      method: "POST",
-      token,
-      body: JSON.stringify(payload),
-    })
+    return requestJsonWithFallback<CheckinDetail>(
+      "/v1/checkins/text",
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify(payload),
+      },
+      () => mockApi.createTextCheckin(token, payload)
+    )
   },
   getCheckin(token: string, entryId: string) {
-    return requestJson<CheckinDetail>(`/v1/checkins/${entryId}`, { token })
+    return requestJsonWithFallback<CheckinDetail>(
+      `/v1/checkins/${entryId}`,
+      { token },
+      () => mockApi.getCheckin(token, entryId)
+    )
   },
   getHistory(token: string, userId: string, limit = 20, offset = 0) {
-    return requestJson<JournalHistoryResponse>(
+    return requestJsonWithFallback<JournalHistoryResponse>(
       `/v1/users/${userId}/entries?limit=${limit}&offset=${offset}`,
-      { token }
+      { token },
+      () => mockApi.getHistory(token, userId, limit, offset)
     )
   },
   getUserSummary(token: string, userId: string, days = 30) {
-    return requestJson<UserSummaryResponse>(
+    return requestJsonWithFallback<UserSummaryResponse>(
       `/v1/users/${userId}/summary?days=${days}`,
-      { token }
+      { token },
+      () => mockApi.getUserSummary(token, userId, days)
     )
   },
   getCalendar(token: string, days = 30) {
-    return requestJson<CalendarResponse>(`/v1/me/calendar?days=${days}`, { token })
+    return requestJsonWithFallback<CalendarResponse>(
+      `/v1/me/calendar?days=${days}`,
+      { token },
+      () => mockApi.getCalendar(token, days)
+    )
   },
   getLatestWeeklyWrapup(token: string) {
-    return requestJson<WrapupSnapshotResponse>("/v1/me/wrapups/weekly/latest", {
-      token,
-    })
+    return requestJsonWithFallback<WrapupSnapshotResponse>(
+      "/v1/me/wrapups/weekly/latest",
+      {
+        token,
+      },
+      () => mockApi.getLatestWeeklyWrapup(token)
+    )
   },
   getLatestMonthlyWrapup(token: string) {
-    return requestJson<WrapupSnapshotResponse>("/v1/me/wrapups/monthly/latest", {
-      token,
-    })
+    return requestJsonWithFallback<WrapupSnapshotResponse>(
+      "/v1/me/wrapups/monthly/latest",
+      {
+        token,
+      },
+      () => mockApi.getLatestMonthlyWrapup(token)
+    )
   },
   getRespondPreview(
     token: string,
@@ -171,28 +249,38 @@ export const api = {
       session_type?: string | null
     }
   ) {
-    return requestJson<RespondPreviewResponse>("/v1/me/respond-preview", {
-      method: "POST",
-      token,
-      body: JSON.stringify(payload),
-    })
+    return requestJsonWithFallback<RespondPreviewResponse>(
+      "/v1/me/respond-preview",
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify(payload),
+      },
+      () => mockApi.getRespondPreview(token, payload)
+    )
   },
   createConversationSession(token: string) {
-    return requestJson<ConversationSessionResponse>("/v1/conversations/sessions", {
-      method: "POST",
-      token,
-    })
+    return requestJsonWithFallback<ConversationSessionResponse>(
+      "/v1/conversations/sessions",
+      {
+        method: "POST",
+        token,
+      },
+      () => mockApi.createConversationSession()
+    )
   },
   getConversationSessions(token: string, limit = 20, offset = 0) {
-    return requestJson<ConversationSessionListResponse>(
+    return requestJsonWithFallback<ConversationSessionListResponse>(
       `/v1/conversations/sessions?limit=${limit}&offset=${offset}`,
-      { token }
+      { token },
+      () => mockApi.getConversationSessions(token, limit, offset)
     )
   },
   getConversationSession(token: string, sessionId: string) {
-    return requestJson<ConversationSessionResponse>(
+    return requestJsonWithFallback<ConversationSessionResponse>(
       `/v1/conversations/sessions/${sessionId}`,
-      { token }
+      { token },
+      () => mockApi.getConversationSession(token, sessionId)
     )
   },
   getConversationSessionTurns(
@@ -201,18 +289,20 @@ export const api = {
     limit = 50,
     offset = 0
   ) {
-    return requestJson<ConversationTurnListResponse>(
+    return requestJsonWithFallback<ConversationTurnListResponse>(
       `/v1/conversations/sessions/${sessionId}/turns?limit=${limit}&offset=${offset}`,
-      { token }
+      { token },
+      () => mockApi.getConversationSessionTurns(token, sessionId, limit, offset)
     )
   },
   endConversationSession(token: string, sessionId: string) {
-    return requestJson<ConversationSessionResponse>(
+    return requestJsonWithFallback<ConversationSessionResponse>(
       `/v1/conversations/sessions/${sessionId}/end`,
       {
         method: "POST",
         token,
-      }
+      },
+      () => mockApi.endConversationSession(token, sessionId)
     )
   },
 }

@@ -46,7 +46,7 @@ function ListeningWaveform() {
       {Array.from({ length: 7 }).map((_, index) => (
         <motion.span
           key={index}
-          className="w-2 rounded-full bg-[#7E9F8B]"
+          className="w-2 rounded-full bg-[var(--brand-primary)]"
           animate={{
             height: ["1.25rem", `${2.6 + (index % 3) * 0.8}rem`, "1.25rem"],
             opacity: [0.45, 1, 0.45],
@@ -80,7 +80,7 @@ function ProcessingOrb() {
         icon={SparklesIcon}
         size={24}
         strokeWidth={1.8}
-        className="relative text-[#7E9F8B]"
+        className="relative text-[var(--brand-primary-muted)]"
       />
     </div>
   )
@@ -342,7 +342,7 @@ export function InteractiveVoiceModal({
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(253,251,247,0.75),rgba(253,251,247,0.34),rgba(47,62,54,0.18))]" />
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute left-[-5rem] top-16 h-56 w-56 rounded-full bg-[#A8C3D8]/26 blur-3xl" />
-            <div className="absolute right-[-4rem] top-24 h-64 w-64 rounded-full bg-[#7E9F8B]/24 blur-3xl" />
+            <div className="absolute right-[-4rem] top-24 h-64 w-64 rounded-full bg-[var(--brand-primary)]/24 blur-3xl" />
             <div className="absolute bottom-[-3rem] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[#EAD2AC]/28 blur-3xl" />
           </div>
 
@@ -374,7 +374,7 @@ export function InteractiveVoiceModal({
                       transition={{ duration: 0.55, ease: "easeOut" }}
                       className="max-w-3xl space-y-6 rounded-[2rem] border border-white/40 bg-white/28 px-6 py-6 shadow-sm backdrop-blur-xl"
                     >
-                      <p className="text-xs uppercase tracking-[0.35em] text-[#7E9F8B]">
+                      <p className="text-xs uppercase tracking-[0.35em] text-[var(--brand-primary-muted)]">
                         Conversation
                       </p>
                       <h2
@@ -397,7 +397,7 @@ export function InteractiveVoiceModal({
                       transition={{ duration: 0.45, ease: "easeOut" }}
                       className="space-y-5 rounded-[2rem] border border-white/40 bg-white/24 px-6 py-6 text-center shadow-sm backdrop-blur-xl"
                     >
-                      <p className="text-xs uppercase tracking-[0.35em] text-[#7E9F8B]">
+                      <p className="text-xs uppercase tracking-[0.35em] text-[var(--brand-primary-muted)]">
                         Soul Forest
                       </p>
                       <h2
@@ -546,7 +546,7 @@ export function InteractiveVoiceModal({
                         </Button>
                         <Button
                           onClick={handleSendToAi}
-                          className="h-12 rounded-full border-0 bg-[#7E9F8B] px-6 text-sm text-white hover:bg-[#6E8F7C]"
+                          className="h-12 rounded-full border-0 bg-[var(--brand-primary)] px-6 text-sm text-[var(--brand-on-primary)] hover:bg-[var(--brand-primary-strong)]"
                         >
                           <HugeiconsIcon
                             icon={SparklesIcon}
@@ -595,7 +595,7 @@ export function InteractiveVoiceModal({
                       >
                         <Button
                           onClick={handleReply}
-                          className="h-14 rounded-full border-0 bg-[#7E9F8B] px-8 text-sm text-white shadow-[0_16px_40px_rgba(126,159,139,0.28)] hover:bg-[#6E8F7C]"
+                          className="h-14 rounded-full border-0 bg-[var(--brand-primary)] px-8 text-sm text-[var(--brand-on-primary)] shadow-[0_16px_40px_rgba(18,199,127,0.28)] hover:bg-[var(--brand-primary-strong)]"
                         >
                           <HugeiconsIcon
                             icon={Mic01Icon}
@@ -635,7 +635,7 @@ export function InteractiveVoiceModal({
                   transition={{ duration: 0.28, ease: "easeOut" }}
                   className="w-full max-w-md rounded-[2rem] border border-white/45 bg-white/82 p-6 text-center shadow-sm backdrop-blur-xl"
                 >
-                  <p className="text-xs uppercase tracking-[0.32em] text-[#7E9F8B]">
+                  <p className="text-xs uppercase tracking-[0.32em] text-[var(--brand-primary-muted)]">
                     Exit conversation
                   </p>
                   <h3

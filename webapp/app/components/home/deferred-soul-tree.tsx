@@ -41,7 +41,7 @@ function SoulTreeFallback({
         <div className="absolute left-1/2 top-[12%] h-36 w-36 -translate-x-1/2 rounded-full bg-[#8FAE9B]/88 blur-[1px]" />
         <div className="absolute left-1/2 top-[20%] h-24 w-24 translate-x-[4.2rem] rounded-full bg-[#D7E4EE]/84 blur-[1px]" />
         <div className="absolute left-1/2 bottom-[18%] h-40 w-10 -translate-x-1/2 rounded-full bg-[#A67E5B]/82" />
-        <div className="absolute bottom-[10%] left-1/2 h-16 w-40 -translate-x-1/2 rounded-full bg-[#7E9F8B]/18 blur-2xl" />
+        <div className="absolute bottom-[10%] left-1/2 h-16 w-40 -translate-x-1/2 rounded-full bg-[var(--brand-primary)]/18 blur-2xl" />
       </div>
     </div>
   )

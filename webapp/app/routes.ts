@@ -7,6 +7,7 @@ export default [
   route("app", "routes/app-layout.tsx", [
     index("routes/app-index.tsx"),
     route("home", "routes/dashboard-home.tsx"),
+    route("chat", "routes/chat.tsx"),
     route("journal", "routes/journal.tsx"),
   ]),
 ] satisfies RouteConfig
