@@ -25,6 +25,17 @@ def select_support_strategy(
             rationale=rationale,
         )
 
+    if state.event_type == "greeting_or_opening":
+        rationale.append("short greeting should feel welcoming and light")
+        return SupportStrategy(
+            support_focus="user",
+            strategy_type="supportive_reflective",
+            suggestion_budget="none",
+            personalization_tone="warm_simple",
+            response_goal="open_gently",
+            rationale=rationale,
+        )
+
     if state.user_stance == "encouraged_by_other" or state.event_type == "recognition_or_praise":
         rationale.append("recognition from another person should be reinforced rather than flattened")
         return SupportStrategy(
@@ -43,9 +54,9 @@ def select_support_strategy(
         return SupportStrategy(
             support_focus="relationship",
             strategy_type="supportive_reflective",
-            suggestion_budget="minimal",
+            suggestion_budget="none",
             personalization_tone="gentle",
-            response_goal="reduce_aloneness",
+            response_goal="hold_concern_gently",
             rationale=rationale,
         )
 
@@ -95,7 +106,7 @@ def select_support_strategy(
         return SupportStrategy(
             support_focus="user",
             strategy_type="celebratory_warm",
-            suggestion_budget="minimal",
+            suggestion_budget="none",
             personalization_tone="soft_celebratory",
             response_goal="reinforce_positive_moment",
             rationale=rationale,

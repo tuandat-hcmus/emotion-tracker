@@ -8,7 +8,7 @@ def extract_insight_features(state: NormalizedEmotionalState) -> InsightFeatures
         is_negative_checkin=negative,
         is_positive_checkin=positive,
         work_trigger=state.social_context == "work_or_school" or "work/school" in state.topic_tags,
-        relationship_strain=state.event_type in {"conflict_or_disappointment", "responsibility_tension", "uncertain_romantic_rejection"}
+        relationship_strain=state.event_type in {"conflict_or_disappointment", "responsibility_tension", "uncertain_romantic_rejection", "other_person_distress"}
         or (state.social_context in {"friendship", "family", "romantic_relationship"} and negative),
         deadline_related=state.event_type == "deadline_pressure",
         loneliness_related=state.event_type == "loneliness_or_disconnection"

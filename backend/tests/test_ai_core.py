@@ -83,6 +83,26 @@ def test_english_preview_defaults_to_english_language_and_canonical_contract(str
     assert isinstance(payload["empathetic_response"], str)
 
 
+def test_greeting_preview_stays_neutral_and_light(strict_client) -> None:
+    headers = _register_and_login(strict_client, "ai-greeting@example.com")
+
+    response = strict_client.post(
+        "/v1/me/respond-preview",
+        headers=headers,
+        json={"transcript": "Hello"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_canonical_emotion_contract(payload)
+    assert payload["emotion_analysis"]["primary_label"] == "neutral"
+    assert payload["ai"]["emotion"]["primary_label"] == "neutral"
+    assert payload["ai"]["state"]["primary_label"] == "neutral"
+    assert payload["response_plan"]["response_variant"] == "empathy_only"
+    assert payload["follow_up_question"] is None
+    assert payload["gentle_suggestion"] is None
+
+
 def test_stress_deadline_preview_uses_stress_supportive_path(strict_client) -> None:
     headers = _register_and_login(strict_client, "ai-stress@example.com")
 

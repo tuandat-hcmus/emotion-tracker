@@ -9,8 +9,10 @@ import type {
   HomeResponse,
   JournalHistoryResponse,
   LoginResponse,
+  MonthlyWrapupDetailResponse,
   RegisterRequest,
   RespondPreviewResponse,
+  TranscribeAudioResponse,
   UserSummaryResponse,
   WrapupSnapshotResponse,
 } from "~/lib/contracts"
@@ -23,6 +25,7 @@ type RequestOptions = {
   body?: BodyInit | null
   headers?: HeadersInit
   method?: string
+  signal?: AbortSignal
   token?: string | null
 }
 
@@ -92,7 +95,10 @@ async function requestJsonWithFallback<T>(
   const headers = new Headers(options.headers)
   headers.set("Accept", "application/json")
 
-  if (options.body && !headers.has("Content-Type")) {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData
+
+  if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json")
   }
 
@@ -107,6 +113,7 @@ async function requestJsonWithFallback<T>(
       method: options.method ?? "GET",
       headers,
       body: options.body,
+      signal: options.signal,
     })
   } catch (error) {
     if (fallback) {
@@ -196,6 +203,17 @@ export const api = {
       () => mockApi.createTextCheckin(token, payload)
     )
   },
+  transcribeCheckinAudio(token: string, file: File, signal?: AbortSignal) {
+    const formData = new FormData()
+    formData.append("file", file)
+
+    return requestJson<TranscribeAudioResponse>("/v1/checkins/transcribe", {
+      method: "POST",
+      signal,
+      token,
+      body: formData,
+    })
+  },
   getCheckin(token: string, entryId: string) {
     return requestJsonWithFallback<CheckinDetail>(
       `/v1/checkins/${entryId}`,
@@ -240,6 +258,22 @@ export const api = {
         token,
       },
       () => mockApi.getLatestMonthlyWrapup(token)
+    )
+  },
+  getLatestMonthlyWrapupDetail(token: string) {
+    return requestJson<MonthlyWrapupDetailResponse>(
+      "/v1/me/wrapups/monthly/latest/detail",
+      {
+        token,
+      }
+    )
+  },
+  getMonthlyWrapupDetail(token: string, year: number, month: number) {
+    return requestJson<MonthlyWrapupDetailResponse>(
+      `/v1/me/wrapups/monthly/${year}/${month}`,
+      {
+        token,
+      }
     )
   },
   getRespondPreview(

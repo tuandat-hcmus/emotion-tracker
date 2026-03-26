@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 
 from app.core.config import get_settings
 from app.services.provider_errors import ProviderConfigurationError, ProviderExecutionError
 
 logger = logging.getLogger(__name__)
+MAX_GEMINI_RENDER_ATTEMPTS = 3
+GEMINI_RENDER_RETRY_DELAYS_SECONDS = (0.75, 1.5)
 
 RENDER_RESPONSE_SCHEMA: dict[str, object] = {
     "type": "OBJECT",
@@ -51,13 +54,23 @@ def build_render_messages(
         "Reflect only the emotional tone provided in structured inputs.\n"
         "Treat normalized_state and render_context as higher-priority guidance than surface emotion words in the transcript.\n"
         "If another person is central, respond to the user's concern, care, uncertainty, or strain instead of speaking as if the other person's emotion fully belongs to the user.\n"
+        "If the user only greets you, answer warmly and simply without analysis.\n"
+        "Vary sentence openings so replies do not all start the same way.\n"
+        "Avoid stock phrases such as 'You're really noticing', 'What feels most present', or repeating 'It sounds like' across many cases.\n"
         "Do not overuse emotion labels in the wording.\n"
         "Prefer simple B2 English.\n"
-        "Keep empathetic_text to 1 or 2 short sentences.\n"
+        "Keep empathetic_text to one concise natural reflection.\n"
         "Do not sound clinical, report-like, or like a therapist template.\n"
+        "Sound like a calm companion, not an emotion report generator.\n"
+        "Prefer everyday wording over therapeutic wording.\n"
         "Avoid repeating the same idea across empathetic_text, follow_up_question, and suggestion_text.\n"
         "If follow_up_question is present, it must add a new gentle angle rather than restating the reflection.\n"
         "If suggestion_text is present, it must be one low-pressure sentence and must add something new.\n"
+        "Keep follow-up questions short, plain, and human.\n"
+        "Prefer questions like 'What feels heaviest right now?' over formal therapeutic wording.\n"
+        "Do not repeat the transcript back line by line.\n"
+        "Do not stack multiple reflections of the same point.\n"
+        "Do not mention valence, stress score, confidence, labels, or emotional taxonomy.\n"
         "Do not introduce specific events, outcomes, arguments, conflict, failures, or missed deadlines unless they are explicitly stated in the transcript.\n"
         "Treat deadline_pressure and similar context as abstract pressure only, not as proof that any deadline was missed.\n"
         "Use transcript-safe wording such as pressure, things piling up, overwhelm, frustration, or difficulty settling when the transcript supports them.\n"
@@ -77,6 +90,9 @@ def build_render_messages(
         "If suggestion_allowed is false, suggestion_text must be null.\n"
         "If follow_up_question_allowed is false, follow_up_question must be null.\n"
         "If quote_allowed is false, quote_text must be null.\n"
+        "When another person is mentioned with seems, looks, or appears, keep uncertainty in the wording.\n"
+        "For other-person concern, center the user's noticing and care.\n"
+        "For positive relief, keep it light and do not turn it into a problem.\n"
         "Use English by default.\n"
         "Return valid JSON only."
     )
@@ -135,6 +151,42 @@ class GeminiRenderService:
         self._model = settings.gemini_text_model
         self._structured_output = settings.response_use_structured_output
 
+    def _generate_with_retry(
+        self,
+        *,
+        model: str,
+        contents: str,
+        config: dict[str, object],
+        language: str,
+        response_variant: object,
+    ):
+        last_exc: Exception | None = None
+        for attempt in range(1, MAX_GEMINI_RENDER_ATTEMPTS + 1):
+            try:
+                return self._client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+            except Exception as exc:
+                last_exc = exc
+                if not _is_retryable_gemini_overload(exc) or attempt >= MAX_GEMINI_RENDER_ATTEMPTS:
+                    raise
+                delay_seconds = GEMINI_RENDER_RETRY_DELAYS_SECONDS[min(attempt - 1, len(GEMINI_RENDER_RETRY_DELAYS_SECONDS) - 1)]
+                logger.warning(
+                    "gemini_render.retry model=%s language=%s response_variant=%s attempt=%s delay_seconds=%.2f error=%s",
+                    model,
+                    language,
+                    response_variant,
+                    attempt,
+                    delay_seconds,
+                    exc,
+                )
+                time.sleep(delay_seconds)
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("Gemini render retry loop exited unexpectedly")
+
     def render(
         self,
         *,
@@ -167,10 +219,12 @@ class GeminiRenderService:
             self._structured_output,
         )
         try:
-            result = self._client.models.generate_content(
+            result = self._generate_with_retry(
                 model=self._model,
                 contents=user_prompt,
                 config=generation_config,
+                language=resolve_render_language(emotion_analysis),
+                response_variant=response_plan.get("response_variant"),
             )
         except Exception as exc:
             logger.exception(
@@ -207,3 +261,8 @@ class GeminiRenderService:
                 "response_plan": response_plan,
             },
         }
+
+
+def _is_retryable_gemini_overload(exc: Exception) -> bool:
+    lowered = str(exc).casefold()
+    return "503" in lowered or "unavailable" in lowered or "high demand" in lowered

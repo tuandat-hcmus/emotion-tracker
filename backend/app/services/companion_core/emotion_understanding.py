@@ -33,6 +33,13 @@ def build_normalized_emotional_state(
         energy = max(energy, 0.34)
         stress = max(stress, 0.42)
         response_mode = "supportive_reflective"
+    elif event_type == "greeting_or_opening":
+        primary_emotion = "neutral"
+        secondary_emotions = _dedupe(secondary_emotions)
+        valence = max(valence, 0.0)
+        energy = max(energy, 0.22)
+        stress = min(stress, 0.18)
+        response_mode = "supportive_reflective"
     elif event_type == "responsibility_tension":
         primary_emotion = "overwhelm" if stress >= 0.72 else "anxiety"
         secondary_emotions = _dedupe(["sadness", "anxiety" if primary_emotion != "anxiety" else "overwhelm", *secondary_emotions])
@@ -64,17 +71,14 @@ def build_normalized_emotional_state(
         stress = max(stress, 0.38)
         response_mode = "low_energy_comfort" if energy <= 0.45 else "validating_gentle"
 
-    emotion_owner = "user"
-    if user_stance == "processing_self":
-        if bool(render_context.get("relationship_concern")) and bool(render_context.get("other_person_state_mentioned")):
-            emotion_owner = "mixed"
-    else:
+    emotion_owner = str(render_context.get("emotion_owner_hint") or "user")
+    if emotion_owner not in {"user", "other_person", "mixed"}:
         emotion_owner = "user"
 
-    owner_confidence = 0.92 if user_stance != "processing_self" else 0.62 if emotion_owner == "user" else 0.7
+    owner_confidence = 0.68 if emotion_owner == "other_person" else 0.72 if emotion_owner == "mixed" else 0.84 if user_stance != "processing_self" else 0.62
     target_confidence = 0.94 if concern_target and relationship_role not in {None, "named_person"} else 0.82 if concern_target else 0.0
-    event_confidence = 0.9 if event_type not in {"uncertain_mixed_state"} else 0.52
-    stance_confidence = 0.9 if user_stance != "processing_self" else 0.58
+    event_confidence = 0.86 if event_type not in {"uncertain_mixed_state"} else 0.52
+    stance_confidence = 0.82 if user_stance != "processing_self" else 0.58
 
     return NormalizedEmotionalState(
         language=str(emotion_analysis.get("language", "en")),

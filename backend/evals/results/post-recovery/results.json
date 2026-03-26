@@ -1,0 +1,399 @@
+{
+  "metadata": {
+    "run_name": "post-recovery",
+    "generated_at": "2026-03-24T08:11:06.122974+00:00",
+    "dataset_path": "/mnt/c/Users/admin/Desktop/Project/Emotion/backend/evals/response_quality_cases.json",
+    "provider": "mock",
+    "provider_override": "mock",
+    "case_count": 3
+  },
+  "summary": {
+    "total_cases": 3,
+    "successful_cases": 3,
+    "failed_cases": 0,
+    "average_word_count": 12.0,
+    "category_counts": {
+      "mixed_recovery_improvement": 3
+    },
+    "issue_counts": {
+      "unexpected_question": 2
+    },
+    "repeated_openings": {},
+    "repeated_questions": {},
+    "category_issue_breakdown": {
+      "mixed_recovery_improvement": {
+        "unexpected_question": 2
+      }
+    }
+  },
+  "comparison": {
+    "baseline_path": "/mnt/c/Users/admin/Desktop/Project/Emotion/backend/evals/results/pre-mock/results.json",
+    "changed_case_count": 3,
+    "changed_cases": [
+      {
+        "id": "recovery-01",
+        "category": "mixed_recovery_improvement",
+        "before": "That sounds heavy, and you do not have to sort all of it out right now. What feels hardest to say out loud?",
+        "after": "It sounds a little lighter today. What feels hardest to say out loud?",
+        "word_count_delta": -10,
+        "issue_delta": -1
+      },
+      {
+        "id": "recovery-02",
+        "category": "mixed_recovery_improvement",
+        "before": "That sounds heavy, and you do not have to sort all of it out right now. What feels hardest to say out loud?",
+        "after": "Even a small shift away from stuck can matter.",
+        "word_count_delta": -14,
+        "issue_delta": -2
+      },
+      {
+        "id": "recovery-03",
+        "category": "mixed_recovery_improvement",
+        "before": "That sounds heavy, and you do not have to sort all of it out right now. What feels hardest to say out loud?",
+        "after": "It sounds a little steadier right now. What feels hardest to say out loud?",
+        "word_count_delta": -9,
+        "issue_delta": -1
+      }
+    ]
+  },
+  "results": [
+    {
+      "id": "recovery-01",
+      "category": "mixed_recovery_improvement",
+      "input_text": "Yesterday was rough, but today feels a little easier.",
+      "should_do": "Honor the improvement without losing realism.",
+      "should_avoid": "Do not drag the response back into heaviness.",
+      "review_focus": "Mixed recovery should sound hopeful but grounded.",
+      "expect_question": false,
+      "max_words": 18,
+      "risk_level": "low",
+      "topic_tags": [
+        "daily life"
+      ],
+      "emotion_analysis": {
+        "primary_label": "neutral",
+        "primary_emotion": "neutral",
+        "response_mode": "supportive_reflective",
+        "provider_name": "legacy_heuristic"
+      },
+      "render_context": {
+        "utterance_type": "reflective_checkin",
+        "event_type": "uncertain_mixed_state",
+        "relationship_target": null,
+        "relationship_role": null,
+        "relationship_concern": false,
+        "health_related_update": false,
+        "short_personal_update": false,
+        "short_event_flag": false,
+        "low_energy_update": false,
+        "appreciation_or_recognition": false,
+        "positive_personal_update": false,
+        "reflective_checkin": true,
+        "responsibility_tension": false,
+        "distress_checkin": false,
+        "user_stance": "processing_self",
+        "social_context": "solo",
+        "concern_target": null,
+        "other_person_state_mentioned": false,
+        "other_person_emotion_word": null,
+        "emotion_owner_hint": "user",
+        "greeting_only": false,
+        "suggestion_allowed": true,
+        "evidence_spans": []
+      },
+      "normalized_state": {
+        "language": "en",
+        "primary_emotion": "neutral",
+        "secondary_emotions": [],
+        "valence": 0.0,
+        "energy": 0.4,
+        "stress": 0.18,
+        "emotion_owner": "user",
+        "user_stance": "processing_self",
+        "social_context": "solo",
+        "event_type": "uncertain_mixed_state",
+        "concern_target": null,
+        "relationship_role": null,
+        "uncertainty": 0.65,
+        "confidence": 0.35,
+        "owner_confidence": 0.62,
+        "event_confidence": 0.52,
+        "target_confidence": 0.0,
+        "stance_confidence": 0.58,
+        "response_mode": "supportive_reflective",
+        "risk_level": "low",
+        "topic_tags": [
+          "daily life"
+        ],
+        "evidence_spans": [],
+        "source_provider": "legacy_heuristic"
+      },
+      "support_strategy": {
+        "support_focus": "user",
+        "strategy_type": "supportive_reflective",
+        "suggestion_budget": "none",
+        "personalization_tone": "gentle",
+        "response_goal": "feel_heard",
+        "rationale": [
+          "default everyday companion mode"
+        ]
+      },
+      "response_plan_summary": {
+        "response_variant": "empathy_plus_followup",
+        "response_mode": "supportive_reflective",
+        "follow_up_question_allowed": true,
+        "suggestion_allowed": false
+      },
+      "response": {
+        "provider_name": "mock",
+        "empathetic_response": "It sounds a little lighter today.",
+        "follow_up_question": "What feels hardest to say out loud?",
+        "gentle_suggestion": null,
+        "ai_response": "It sounds a little lighter today. What feels hardest to say out loud?"
+      },
+      "heuristics": {
+        "word_count": 13,
+        "sentence_count": 2,
+        "question_count": 1,
+        "opening_key": "it sounds a",
+        "question_key": "what feels hardest to say out",
+        "stock_phrase_hits": [],
+        "empathy_question_overlap": 0.0,
+        "empathy_suggestion_overlap": 0.0,
+        "question_suggestion_overlap": 0.0,
+        "self_vs_other_owner_drift": null
+      },
+      "issues": [
+        "unexpected_question"
+      ]
+    },
+    {
+      "id": "recovery-02",
+      "category": "mixed_recovery_improvement",
+      "input_text": "I'm still tired, but not as stuck as before.",
+      "should_do": "Notice the shift without overstating it.",
+      "should_avoid": "Do not erase the remaining tiredness.",
+      "review_focus": "Nuance matters.",
+      "expect_question": false,
+      "max_words": 18,
+      "risk_level": "low",
+      "topic_tags": [
+        "health"
+      ],
+      "emotion_analysis": {
+        "primary_label": "neutral",
+        "primary_emotion": "neutral",
+        "response_mode": "supportive_reflective",
+        "provider_name": "legacy_heuristic"
+      },
+      "render_context": {
+        "utterance_type": "low_energy_update",
+        "event_type": "exhaustion_or_flatness",
+        "relationship_target": null,
+        "relationship_role": null,
+        "relationship_concern": false,
+        "health_related_update": true,
+        "short_personal_update": false,
+        "short_event_flag": false,
+        "low_energy_update": true,
+        "appreciation_or_recognition": false,
+        "positive_personal_update": false,
+        "reflective_checkin": true,
+        "responsibility_tension": false,
+        "distress_checkin": false,
+        "user_stance": "processing_self",
+        "social_context": "solo",
+        "concern_target": null,
+        "other_person_state_mentioned": false,
+        "other_person_emotion_word": null,
+        "emotion_owner_hint": "user",
+        "greeting_only": false,
+        "suggestion_allowed": true,
+        "evidence_spans": [
+          "ill",
+          "tired"
+        ]
+      },
+      "normalized_state": {
+        "language": "en",
+        "primary_emotion": "neutral",
+        "secondary_emotions": [],
+        "valence": 0.0,
+        "energy": 0.4,
+        "stress": 0.18,
+        "emotion_owner": "user",
+        "user_stance": "processing_self",
+        "social_context": "solo",
+        "event_type": "exhaustion_or_flatness",
+        "concern_target": null,
+        "relationship_role": null,
+        "uncertainty": 0.65,
+        "confidence": 0.35,
+        "owner_confidence": 0.62,
+        "event_confidence": 0.86,
+        "target_confidence": 0.0,
+        "stance_confidence": 0.58,
+        "response_mode": "supportive_reflective",
+        "risk_level": "low",
+        "topic_tags": [
+          "health"
+        ],
+        "evidence_spans": [
+          "ill",
+          "tired"
+        ],
+        "source_provider": "legacy_heuristic"
+      },
+      "support_strategy": {
+        "support_focus": "user",
+        "strategy_type": "supportive_reflective",
+        "suggestion_budget": "none",
+        "personalization_tone": "gentle",
+        "response_goal": "feel_heard",
+        "rationale": [
+          "default everyday companion mode"
+        ]
+      },
+      "response_plan_summary": {
+        "response_variant": "empathy_only",
+        "response_mode": "supportive_reflective",
+        "follow_up_question_allowed": false,
+        "suggestion_allowed": false
+      },
+      "response": {
+        "provider_name": "mock",
+        "empathetic_response": "Even a small shift away from stuck can matter.",
+        "follow_up_question": null,
+        "gentle_suggestion": null,
+        "ai_response": "Even a small shift away from stuck can matter."
+      },
+      "heuristics": {
+        "word_count": 9,
+        "sentence_count": 1,
+        "question_count": 0,
+        "opening_key": "even a small",
+        "question_key": "",
+        "stock_phrase_hits": [],
+        "empathy_question_overlap": 0.0,
+        "empathy_suggestion_overlap": 0.0,
+        "question_suggestion_overlap": 0.0,
+        "self_vs_other_owner_drift": null
+      },
+      "issues": []
+    },
+    {
+      "id": "recovery-03",
+      "category": "mixed_recovery_improvement",
+      "input_text": "I cried earlier, but now I feel calmer.",
+      "should_do": "Keep the response simple and steady.",
+      "should_avoid": "Do not overanalyze the emotional process.",
+      "review_focus": "Human, not clinical.",
+      "expect_question": false,
+      "max_words": 18,
+      "risk_level": "low",
+      "topic_tags": [
+        "daily life"
+      ],
+      "emotion_analysis": {
+        "primary_label": "neutral",
+        "primary_emotion": "neutral",
+        "response_mode": "supportive_reflective",
+        "provider_name": "legacy_heuristic"
+      },
+      "render_context": {
+        "utterance_type": "distress_checkin",
+        "event_type": "uncertain_mixed_state",
+        "relationship_target": null,
+        "relationship_role": null,
+        "relationship_concern": false,
+        "health_related_update": false,
+        "short_personal_update": false,
+        "short_event_flag": false,
+        "low_energy_update": false,
+        "appreciation_or_recognition": false,
+        "positive_personal_update": false,
+        "reflective_checkin": false,
+        "responsibility_tension": false,
+        "distress_checkin": true,
+        "user_stance": "processing_self",
+        "social_context": "solo",
+        "concern_target": null,
+        "other_person_state_mentioned": false,
+        "other_person_emotion_word": null,
+        "emotion_owner_hint": "user",
+        "greeting_only": false,
+        "suggestion_allowed": true,
+        "evidence_spans": [
+          "i feel"
+        ]
+      },
+      "normalized_state": {
+        "language": "en",
+        "primary_emotion": "neutral",
+        "secondary_emotions": [],
+        "valence": 0.0,
+        "energy": 0.4,
+        "stress": 0.18,
+        "emotion_owner": "user",
+        "user_stance": "processing_self",
+        "social_context": "solo",
+        "event_type": "uncertain_mixed_state",
+        "concern_target": null,
+        "relationship_role": null,
+        "uncertainty": 0.65,
+        "confidence": 0.35,
+        "owner_confidence": 0.62,
+        "event_confidence": 0.52,
+        "target_confidence": 0.0,
+        "stance_confidence": 0.58,
+        "response_mode": "supportive_reflective",
+        "risk_level": "low",
+        "topic_tags": [
+          "daily life"
+        ],
+        "evidence_spans": [
+          "i feel"
+        ],
+        "source_provider": "legacy_heuristic"
+      },
+      "support_strategy": {
+        "support_focus": "user",
+        "strategy_type": "supportive_reflective",
+        "suggestion_budget": "none",
+        "personalization_tone": "gentle",
+        "response_goal": "feel_heard",
+        "rationale": [
+          "default everyday companion mode"
+        ]
+      },
+      "response_plan_summary": {
+        "response_variant": "empathy_plus_followup",
+        "response_mode": "supportive_reflective",
+        "follow_up_question_allowed": true,
+        "suggestion_allowed": false
+      },
+      "response": {
+        "provider_name": "mock",
+        "empathetic_response": "It sounds a little steadier right now.",
+        "follow_up_question": "What feels hardest to say out loud?",
+        "gentle_suggestion": null,
+        "ai_response": "It sounds a little steadier right now. What feels hardest to say out loud?"
+      },
+      "heuristics": {
+        "word_count": 14,
+        "sentence_count": 2,
+        "question_count": 1,
+        "opening_key": "it sounds a",
+        "question_key": "what feels hardest to say out",
+        "stock_phrase_hits": [],
+        "empathy_question_overlap": 0.0,
+        "empathy_suggestion_overlap": 0.0,
+        "question_suggestion_overlap": 0.0,
+        "self_vs_other_owner_drift": null
+      },
+      "issues": [
+        "unexpected_question"
+      ]
+    }
+  ]
+}

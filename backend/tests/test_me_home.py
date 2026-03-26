@@ -1,4 +1,5 @@
 from io import BytesIO
+from datetime import datetime, timezone
 
 
 def _register_and_login(client, email: str, password: str = "secret123", display_name: str | None = None) -> dict[str, str]:
@@ -40,6 +41,8 @@ def test_new_me_endpoints_require_auth(strict_client) -> None:
         "/v1/me/calendar",
         "/v1/me/wrapups/weekly/latest",
         "/v1/me/wrapups/monthly/latest",
+        "/v1/me/wrapups/monthly/latest/detail",
+        "/v1/me/wrapups/monthly/2026/3",
     ):
         response = strict_client.get(path)
         assert response.status_code == 401
@@ -259,3 +262,102 @@ def test_wrapup_generation_works_without_any_entries(strict_client) -> None:
     assert payload["high_stress_frequency"] == 0.0
     assert payload["trend_block"]["workload_pattern_detected"] is False
     assert payload["closing_message"]
+
+
+def test_monthly_wrapup_detail_returns_rich_payload_for_current_month(strict_client) -> None:
+    headers = _register_and_login(strict_client, "monthly-detail@example.com")
+    first_entry = _upload_entry(strict_client, headers)
+    second_entry = _upload_entry(strict_client, headers)
+    third_entry = _upload_entry(strict_client, headers)
+
+    _process_entry(strict_client, first_entry, headers, "I feel stressed because work deadlines keep piling up.")
+    _process_entry(strict_client, second_entry, headers, "I still feel overwhelmed and pressured by deadlines at work.")
+    _process_entry(strict_client, third_entry, headers, "I feel lighter and grateful because my friends supported me.")
+
+    today = datetime.now(timezone.utc).date()
+    response = strict_client.get(f"/v1/me/wrapups/monthly/{today.year}/{today.month}", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["period"]["year"] == today.year
+    assert payload["period"]["month"] == today.month
+    assert payload["overview"]["overall_checkin_count"] == 3
+    assert isinstance(payload["headline_cards"], list)
+    assert payload["headline_cards"]
+    assert payload["stats"]["total_checkins"] == 3
+    assert "emotion_distribution" in payload["distributions"]
+    assert "weekly_stress_trend" in payload["distributions"]
+    assert "weekly_checkin_counts" in payload["distributions"]
+    assert payload["pattern_lists"]["dominant_emotional_patterns"]
+    assert payload["visual_hints"]["month_theme_icon"] in {"cloud", "spark", "seed", "wave", "sun", "moon", "leaf", "heart"}
+
+
+def test_monthly_wrapup_detail_handles_sparse_month_honestly(strict_client) -> None:
+    headers = _register_and_login(strict_client, "monthly-detail-sparse@example.com")
+    entry_id = _upload_entry(strict_client, headers)
+    _process_entry(strict_client, entry_id, headers, "I feel calmer today and a bit relieved.")
+
+    today = datetime.now(timezone.utc).date()
+    response = strict_client.get(f"/v1/me/wrapups/monthly/{today.year}/{today.month}", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["overview"]["overall_checkin_count"] == 1
+    assert payload["headline_cards"]
+    assert payload["stats"]["top_trigger"] is None
+    assert payload["pattern_lists"]["recurring_triggers"] == []
+    assert payload["overview"]["summary_text"]
+
+
+def test_monthly_wrapup_detail_handles_no_data_month(strict_client) -> None:
+    headers = _register_and_login(strict_client, "monthly-detail-empty@example.com")
+
+    response = strict_client.get("/v1/me/wrapups/monthly/2020/1", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["overview"]["overall_checkin_count"] == 0
+    assert payload["headline_cards"] == []
+    assert payload["stats"]["total_checkins"] == 0
+    assert payload["pattern_lists"]["recurring_triggers"] == []
+    assert payload["distributions"]["emotion_distribution"] == []
+    assert payload["overview"]["summary_text"]
+
+
+def test_monthly_wrapup_detail_semantic_mapping_is_deterministic(strict_client) -> None:
+    headers = _register_and_login(strict_client, "monthly-detail-semantic@example.com")
+    first_entry = _upload_entry(strict_client, headers)
+    second_entry = _upload_entry(strict_client, headers)
+    third_entry = _upload_entry(strict_client, headers)
+
+    _process_entry(strict_client, first_entry, headers, "I feel stressed because work deadlines keep piling up.")
+    _process_entry(strict_client, second_entry, headers, "I still feel overwhelmed and pressured by deadlines at work.")
+    _process_entry(strict_client, third_entry, headers, "I felt joy and gratitude after time with family.")
+
+    today = datetime.now(timezone.utc).date()
+    response = strict_client.get(f"/v1/me/wrapups/monthly/{today.year}/{today.month}", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    cards = {card["id"]: card for card in payload["headline_cards"]}
+    if "highest_stress_pattern" in cards:
+        assert cards["highest_stress_pattern"]["icon_key"] == "wave"
+        assert cards["highest_stress_pattern"]["color_token"] == "sunset_orange"
+    if "strongest_positive_anchor" in cards:
+        assert cards["strongest_positive_anchor"]["icon_key"] == "sun"
+        assert cards["strongest_positive_anchor"]["color_token"] == "soft_yellow"
+
+
+def test_monthly_wrapup_detail_latest_respects_user_ownership(strict_client) -> None:
+    headers_a = _register_and_login(strict_client, "monthly-detail-owner-a@example.com")
+    headers_b = _register_and_login(strict_client, "monthly-detail-owner-b@example.com")
+    entry_id = _upload_entry(strict_client, headers_a)
+    _process_entry(strict_client, entry_id, headers_a, "I feel stressed because work deadlines keep piling up.")
+
+    response_a = strict_client.get("/v1/me/wrapups/monthly/latest/detail", headers=headers_a)
+    response_b = strict_client.get("/v1/me/wrapups/monthly/latest/detail", headers=headers_b)
+
+    assert response_a.status_code == 200
+    assert response_b.status_code == 200
+    assert response_a.json()["overview"]["overall_checkin_count"] == 1
+    assert response_b.json()["overview"]["overall_checkin_count"] == 0

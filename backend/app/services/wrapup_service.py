@@ -7,6 +7,17 @@ from sqlalchemy.orm import Session
 from app.models.journal_entry import JournalEntry
 from app.models.wrapup_snapshot import WrapupSnapshot
 from app.schemas.me import (
+    MonthlyWrapupDetailResponse,
+    MonthlyWrapupDistributionsResponse,
+    MonthlyWrapupDistributionItemResponse,
+    MonthlyWrapupHeadlineCardResponse,
+    MonthlyWrapupOverviewResponse,
+    MonthlyWrapupPatternItemResponse,
+    MonthlyWrapupPatternListsResponse,
+    MonthlyWrapupPeriodResponse,
+    MonthlyWrapupStatsResponse,
+    MonthlyWrapupVisualHintsResponse,
+    MonthlyWrapupWeeklyMetricResponse,
     WrapupConsistencyResponse,
     WrapupDayHighlightResponse,
     WrapupInsightCardResponse,
@@ -31,6 +42,10 @@ from app.services.journal_service import (
     get_entry_normalized_state,
     get_entry_support_strategy,
 )
+
+_POSITIVE_EMOTIONS = {"joy", "gratitude", "love", "relief", "calm", "hopeful", "content"}
+_LOW_ENERGY_EMOTIONS = {"sadness", "loneliness", "grief", "tired", "fatigue", "numb"}
+_HIGH_STRESS_EMOTIONS = {"stress", "anxiety", "fear", "anger", "overwhelmed", "frustration", "panic"}
 
 
 def _period_bounds(period_type: str, anchor_date: date) -> tuple[date, date]:
@@ -331,6 +346,376 @@ def _serialize_snapshot(snapshot: WrapupSnapshot) -> WrapupSnapshotResponse:
     )
 
 
+def _month_label(period_start: date) -> str:
+    return period_start.strftime("%B %Y")
+
+
+def _counter_weight(count: int, total: int) -> float | None:
+    if total <= 0:
+        return None
+    return round(count / total, 2)
+
+
+def _emotion_counter(entries: list[JournalEntry]) -> Counter[str]:
+    return Counter(entry.emotion_label for entry in entries if entry.emotion_label)
+
+
+def _recurring_trigger_counter(entries: list[JournalEntry]) -> Counter[str]:
+    trigger_candidates: Counter[str] = Counter()
+    for entry in entries:
+        entry_candidates: set[str] = set()
+        state = get_entry_normalized_state(entry)
+        event_type = state.get("event_type")
+        if isinstance(event_type, str) and event_type:
+            entry_candidates.add(event_type)
+        entry_candidates.update(get_entry_context_tags(entry))
+        memory_summary = get_entry_memory_summary(entry)
+        recurring_triggers = memory_summary.get("recurring_triggers")
+        if isinstance(recurring_triggers, list):
+            entry_candidates.update(str(item) for item in recurring_triggers if str(item))
+        trigger_candidates.update(entry_candidates)
+    return trigger_candidates
+
+
+def _workload_pattern_counter(entries: list[JournalEntry]) -> Counter[str]:
+    patterns: Counter[str] = Counter()
+    for entry in entries:
+        signals = set(get_entry_dominant_signals(entry))
+        context_tags = set(get_entry_context_tags(entry))
+        state = get_entry_normalized_state(entry)
+        strategy = get_entry_support_strategy(entry)
+        event_type = str(state.get("event_type") or "")
+        if (
+            entry.response_mode == "stress_supportive"
+            or strategy.get("strategy_type") == "stress_supportive"
+            or "deadline_pressure" in signals
+            or event_type == "deadline_pressure"
+        ):
+            patterns["deadline_pressure"] += 1
+        if "work/school" in context_tags or "work_trigger" in signals:
+            patterns["workload_pressure"] += 1
+    return patterns
+
+
+def _positive_anchor_counter(entries: list[JournalEntry]) -> Counter[str]:
+    anchors: Counter[str] = Counter()
+    for entry in entries:
+        context_tags = get_entry_context_tags(entry)
+        signals = set(get_entry_dominant_signals(entry))
+        memory_summary = get_entry_memory_summary(entry)
+        if entry.emotion_label == "joy" or "positive_affect" in signals:
+            if context_tags:
+                anchors.update(context_tags)
+            dominant_positive_patterns = memory_summary.get("dominant_positive_patterns")
+            if isinstance(dominant_positive_patterns, list):
+                anchors.update(str(item) for item in dominant_positive_patterns if str(item))
+            elif not context_tags:
+                anchors["positive_moment"] += 1
+    return anchors
+
+
+def _pattern_items(counter: Counter[str], total: int, limit: int, kind: str) -> list[MonthlyWrapupPatternItemResponse]:
+    items: list[MonthlyWrapupPatternItemResponse] = []
+    for label, count in counter.most_common(limit):
+        if count <= 0:
+            continue
+        icon_key, color_token = _semantic_tokens(kind, label)
+        items.append(
+            MonthlyWrapupPatternItemResponse(
+                label=label,
+                count=count,
+                weight=_counter_weight(count, total),
+                icon_key=icon_key,
+                color_token=color_token,
+            )
+        )
+    return items
+
+
+def _emotion_semantics(label: str | None) -> tuple[str, str]:
+    normalized = (label or "").strip().lower()
+    if normalized in _POSITIVE_EMOTIONS:
+        return ("sun", "soft_yellow")
+    if normalized in _LOW_ENERGY_EMOTIONS:
+        return ("cloud", "lavender")
+    if normalized in _HIGH_STRESS_EMOTIONS:
+        return ("wave", "sunset_orange")
+    if normalized in {"calm", "peace", "steady"}:
+        return ("leaf", "calm_blue")
+    return ("heart", "warm_pink")
+
+
+def _semantic_tokens(kind: str, label: str | None = None, value: str | None = None) -> tuple[str, str]:
+    normalized_label = (label or "").strip().lower()
+    normalized_value = (value or "").strip().lower()
+    merged = " ".join(part for part in (normalized_label, normalized_value) if part)
+
+    if kind in {"most_frequent_emotion", "dominant_emotional_patterns"}:
+        return _emotion_semantics(label)
+    if kind in {"most_common_trigger", "highest_stress_pattern", "workload_deadline_patterns"}:
+        return ("wave", "sunset_orange")
+    if kind in {"strongest_positive_anchor", "positive_anchors"}:
+        return ("sun", "soft_yellow")
+    if kind in {"consistency_streak"}:
+        return ("seed", "forest_green")
+    if kind in {"emotional_shift"}:
+        if normalized_value == "improving":
+            return ("leaf", "forest_green")
+        if normalized_value == "heavier" or normalized_value == "under_strain":
+            return ("cloud", "lavender")
+        return ("wave", "calm_blue")
+    if kind in {"month_theme"}:
+        if any(token in merged for token in ("work", "deadline", "school", "pressure")):
+            return ("wave", "sunset_orange")
+        if any(token in merged for token in ("rest", "family", "friend", "gratitude", "calm")):
+            return ("heart", "warm_pink")
+        return ("spark", "warm_pink")
+    if any(token in merged for token in ("deadline", "work", "school", "pressure", "stress")):
+        return ("wave", "sunset_orange")
+    if any(token in merged for token in ("joy", "gratitude", "love", "support", "friend", "family")):
+        return ("sun", "soft_yellow")
+    if any(token in merged for token in ("sad", "lonely", "tired", "low")):
+        return ("cloud", "lavender")
+    return ("heart", "warm_pink")
+
+
+def _month_theme(top_topic: str | None, dominant_emotion: str | None) -> str | None:
+    if top_topic:
+        return top_topic
+    return dominant_emotion
+
+
+def _longest_gap_days(checkin_days: list[date], period_start: date, period_end: date) -> int | None:
+    if period_end < period_start:
+        return None
+    if not checkin_days:
+        return (period_end - period_start).days + 1
+
+    unique_days = sorted(set(checkin_days))
+    longest = max((unique_days[0] - period_start).days, (period_end - unique_days[-1]).days)
+    for index in range(1, len(unique_days)):
+        gap_days = (unique_days[index] - unique_days[index - 1]).days - 1
+        longest = max(longest, gap_days)
+    return longest
+
+
+def _weekly_metrics(
+    entries: list[JournalEntry],
+    period_start: date,
+    period_end: date,
+    tzinfo,
+) -> tuple[list[MonthlyWrapupWeeklyMetricResponse], list[MonthlyWrapupWeeklyMetricResponse]]:
+    stress_items: list[MonthlyWrapupWeeklyMetricResponse] = []
+    count_items: list[MonthlyWrapupWeeklyMetricResponse] = []
+    cursor = period_start
+    week_index = 1
+
+    while cursor <= period_end:
+        week_end = min(cursor + timedelta(days=6), period_end)
+        week_entries = [
+            entry
+            for entry in entries
+            if cursor <= to_local_date(entry.created_at, tzinfo) <= week_end
+        ]
+        count = len(week_entries)
+        metric = MonthlyWrapupWeeklyMetricResponse(
+            week_label=f"Week {week_index}",
+            date_from=cursor.isoformat(),
+            date_to=week_end.isoformat(),
+            avg_stress_score=_average([entry.stress_score for entry in week_entries]),
+            count=count,
+        )
+        stress_items.append(metric)
+        count_items.append(metric.model_copy())
+        cursor = week_end + timedelta(days=1)
+        week_index += 1
+
+    return stress_items, count_items
+
+
+def _emotion_distribution(emotion_counts: Counter[str], total_entries: int) -> list[MonthlyWrapupDistributionItemResponse]:
+    if total_entries <= 0:
+        return []
+    return [
+        MonthlyWrapupDistributionItemResponse(
+            label=label,
+            count=count,
+            percent=round((count / total_entries) * 100, 1),
+        )
+        for label, count in emotion_counts.most_common(5)
+    ]
+
+
+def _intensity_level(high_stress_frequency: float, average_stress_score: float | None) -> str:
+    if high_stress_frequency >= 0.5 or (average_stress_score or 0.0) >= 0.7:
+        return "high"
+    if high_stress_frequency >= 0.2 or (average_stress_score or 0.0) >= 0.4:
+        return "moderate"
+    return "low"
+
+
+def _month_visual_hints(
+    dominant_emotion: str | None,
+    high_stress_frequency: float,
+    average_stress_score: float | None,
+    month_theme: str | None,
+) -> MonthlyWrapupVisualHintsResponse:
+    theme_icon, theme_color = _semantic_tokens("month_theme", month_theme, dominant_emotion)
+    return MonthlyWrapupVisualHintsResponse(
+        month_mood_color=theme_color if dominant_emotion or month_theme else "calm_blue",
+        month_theme_icon=theme_icon,
+        intensity_level=_intensity_level(high_stress_frequency, average_stress_score),
+    )
+
+
+def _headline_cards(
+    *,
+    total_entries: int,
+    emotion_counts: Counter[str],
+    trigger_counter: Counter[str],
+    positive_anchor_counter: Counter[str],
+    workload_counter: Counter[str],
+    longest_streak_days: int,
+    emotional_direction_trend: str,
+    month_theme: str | None,
+    high_stress_frequency: float,
+) -> list[MonthlyWrapupHeadlineCardResponse]:
+    cards: list[MonthlyWrapupHeadlineCardResponse] = []
+
+    top_emotion, top_emotion_count = (emotion_counts.most_common(1)[0] if emotion_counts else (None, 0))
+    if top_emotion:
+        icon_key, color_token = _semantic_tokens("most_frequent_emotion", top_emotion)
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="most_frequent_emotion",
+                title="Most frequent emotion",
+                subtitle="Emotion seen most often this month",
+                value=top_emotion,
+                supporting_text=f"{top_emotion_count} of {total_entries} check-ins",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=1,
+                source_type="emotion_label",
+            )
+        )
+
+    top_trigger, top_trigger_count = (trigger_counter.most_common(1)[0] if trigger_counter else (None, 0))
+    if top_trigger and top_trigger_count >= 2:
+        icon_key, color_token = _semantic_tokens("most_common_trigger", top_trigger)
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="most_common_trigger",
+                title="Most common trigger",
+                subtitle="Repeated trigger across stored check-ins",
+                value=top_trigger,
+                supporting_text=f"Seen {top_trigger_count} times",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=2,
+                source_type="memory_summary",
+            )
+        )
+
+    top_anchor, top_anchor_count = (positive_anchor_counter.most_common(1)[0] if positive_anchor_counter else (None, 0))
+    if top_anchor:
+        icon_key, color_token = _semantic_tokens("strongest_positive_anchor", top_anchor)
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="strongest_positive_anchor",
+                title="Strongest positive anchor",
+                subtitle="Supportive pattern that appeared in positive moments",
+                value=top_anchor,
+                supporting_text=f"Referenced {top_anchor_count} times",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=3,
+                source_type="memory_summary",
+            )
+        )
+
+    top_workload, top_workload_count = (workload_counter.most_common(1)[0] if workload_counter else (None, 0))
+    if top_workload:
+        icon_key, color_token = _semantic_tokens("highest_stress_pattern", top_workload)
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="highest_stress_pattern",
+                title="Highest stress pattern",
+                subtitle="Pressure signal repeated in stored metadata",
+                value=top_workload,
+                supporting_text=f"Matched {top_workload_count} entries",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=4,
+                source_type="normalized_state",
+            )
+        )
+    elif total_entries > 0 and high_stress_frequency > 0:
+        icon_key, color_token = _semantic_tokens("highest_stress_pattern", value="stress")
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="highest_stress_pattern",
+                title="High stress presence",
+                subtitle="Share of check-ins with elevated stress",
+                value=f"{int(high_stress_frequency * 100)}%",
+                supporting_text="Based on persisted stress scores",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=4,
+                source_type="stress_score",
+            )
+        )
+
+    if longest_streak_days > 0:
+        icon_key, color_token = _semantic_tokens("consistency_streak")
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="consistency_streak",
+                title="Consistency streak",
+                subtitle="Longest run of active check-in days",
+                value=longest_streak_days,
+                supporting_text="Measured from persisted entry dates",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=5,
+                source_type="created_at",
+            )
+        )
+
+    if total_entries >= 2:
+        icon_key, color_token = _semantic_tokens("emotional_shift", value=emotional_direction_trend)
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="emotional_shift",
+                title="Emotional shift",
+                subtitle="Change between the first and second half of the month",
+                value=emotional_direction_trend,
+                supporting_text="Derived from persisted valence scores",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=6,
+                source_type="valence_score",
+            )
+        )
+
+    if month_theme:
+        icon_key, color_token = _semantic_tokens("month_theme", month_theme)
+        cards.append(
+            MonthlyWrapupHeadlineCardResponse(
+                id="month_theme",
+                title="Month theme",
+                subtitle="Most visible recurring theme from stored data",
+                value=month_theme,
+                supporting_text="Based on top topics or dominant emotion",
+                icon_key=icon_key,
+                color_token=color_token,
+                priority=7,
+                source_type="topic_tags",
+            )
+        )
+
+    return sorted(cards, key=lambda card: card.priority)[:6]
+
+
 def generate_wrapup_snapshot(
     db: Session,
     user_id: str,
@@ -474,6 +859,132 @@ def get_latest_wrapup_snapshot(
     if snapshot is None:
         return generate_wrapup_snapshot(db, user_id, period_type)
     return _serialize_snapshot(snapshot)
+
+
+def build_monthly_wrapup_detail(
+    db: Session,
+    user_id: str,
+    year: int,
+    month: int,
+) -> MonthlyWrapupDetailResponse:
+    anchor = date(year, month, 1)
+    preferences = get_or_create_preferences(db, user_id)
+    tzinfo = resolve_user_timezone(preferences)
+    period_start, period_end = _period_bounds("month", anchor)
+    entries = [
+        entry
+        for entry in list_entries_for_local_date_range(db, user_id, period_start, period_end, tzinfo)
+        if entry.processing_status == "processed"
+    ]
+    grouped = _daily_group(entries, tzinfo)
+    checkin_days = sorted(grouped.keys())
+    emotion_counts = _emotion_counter(entries)
+    trigger_counter = _recurring_trigger_counter(entries)
+    positive_anchor_counter = _positive_anchor_counter(entries)
+    workload_counter = _workload_pattern_counter(entries)
+    dominant_patterns = _pattern_items(emotion_counts, len(entries), 4, "dominant_emotional_patterns")
+    recurring_triggers = _pattern_items(
+        Counter({label: count for label, count in trigger_counter.items() if count >= 2}),
+        len(entries),
+        4,
+        "most_common_trigger",
+    )
+    positive_anchors = _pattern_items(positive_anchor_counter, len(entries), 4, "positive_anchors")
+    workload_patterns = _pattern_items(workload_counter, len(entries), 4, "workload_deadline_patterns")
+    emotional_direction_trend = _emotional_direction_trend(entries)
+    high_stress_entry_count = _high_stress_entry_count(entries)
+    high_stress_frequency = _rounded_ratio(high_stress_entry_count, len(entries))
+    streak_highlight = _streak_lengths(checkin_days, period_end)
+    average_stress_score = _average([entry.stress_score for entry in entries])
+    top_topics = _top_topics(entries)
+    dominant_emotion = emotion_counts.most_common(1)[0][0] if emotion_counts else None
+    month_theme = _month_theme(top_topics[0] if top_topics else None, dominant_emotion)
+    weekly_stress_trend, weekly_checkin_counts = _weekly_metrics(entries, period_start, period_end, tzinfo)
+    headline_cards = _headline_cards(
+        total_entries=len(entries),
+        emotion_counts=emotion_counts,
+        trigger_counter=Counter({item.label: item.count for item in recurring_triggers}),
+        positive_anchor_counter=positive_anchor_counter,
+        workload_counter=workload_counter,
+        longest_streak_days=streak_highlight.longest_streak_days,
+        emotional_direction_trend=emotional_direction_trend,
+        month_theme=month_theme,
+        high_stress_frequency=high_stress_frequency,
+    )
+
+    return MonthlyWrapupDetailResponse(
+        period=MonthlyWrapupPeriodResponse(
+            year=year,
+            month=month,
+            label=_month_label(period_start),
+            date_from=period_start.isoformat(),
+            date_to=period_end.isoformat(),
+        ),
+        overview=MonthlyWrapupOverviewResponse(
+            summary_text=_summary_text(
+                period_type="month",
+                total_entries=len(entries),
+                direction=emotional_direction_trend,
+                dominant_patterns=[item.label for item in dominant_patterns],
+                recurring_triggers=[item.label for item in recurring_triggers],
+                positive_anchors=[item.label for item in positive_anchors],
+                high_stress_frequency=high_stress_frequency,
+            ),
+            dominant_emotion=dominant_emotion,
+            emotional_direction_trend=emotional_direction_trend,
+            overall_checkin_count=len(entries),
+            high_stress_frequency=high_stress_frequency,
+        ),
+        headline_cards=headline_cards,
+        stats=MonthlyWrapupStatsResponse(
+            total_checkins=len(entries),
+            active_days=len(checkin_days),
+            avg_stress_score=average_stress_score,
+            top_emotion=dominant_emotion,
+            top_trigger=recurring_triggers[0].label if recurring_triggers else None,
+            top_positive_anchor=positive_anchors[0].label if positive_anchors else None,
+            longest_gap_days=_longest_gap_days(checkin_days, period_start, period_end),
+            best_streak_days=streak_highlight.longest_streak_days,
+        ),
+        distributions=MonthlyWrapupDistributionsResponse(
+            emotion_distribution=_emotion_distribution(emotion_counts, len(entries)),
+            weekly_stress_trend=weekly_stress_trend,
+            weekly_checkin_counts=weekly_checkin_counts,
+        ),
+        pattern_lists=MonthlyWrapupPatternListsResponse(
+            recurring_triggers=recurring_triggers,
+            positive_anchors=positive_anchors,
+            workload_deadline_patterns=workload_patterns,
+            dominant_emotional_patterns=dominant_patterns,
+        ),
+        visual_hints=_month_visual_hints(
+            dominant_emotion=dominant_emotion,
+            high_stress_frequency=high_stress_frequency,
+            average_stress_score=average_stress_score,
+            month_theme=month_theme,
+        ),
+    )
+
+
+def get_latest_monthly_wrapup_detail(
+    db: Session,
+    user_id: str,
+) -> MonthlyWrapupDetailResponse:
+    snapshot = (
+        db.query(WrapupSnapshot)
+        .filter(
+            WrapupSnapshot.user_id == user_id,
+            WrapupSnapshot.period_type == "month",
+        )
+        .order_by(WrapupSnapshot.generated_at.desc(), WrapupSnapshot.created_at.desc())
+        .first()
+    )
+    if snapshot is not None:
+        return build_monthly_wrapup_detail(db, user_id, snapshot.period_start.year, snapshot.period_start.month)
+
+    preferences = get_or_create_preferences(db, user_id)
+    today = resolve_user_today(preferences)
+    return build_monthly_wrapup_detail(db, user_id, today.year, today.month)
 
 
 def get_latest_wrapup_meta(db: Session, user_id: str) -> tuple[datetime | None, datetime | None]:

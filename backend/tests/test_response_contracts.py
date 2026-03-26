@@ -1,5 +1,7 @@
 from app.services.response_policy_service import build_follow_up_question
+from app.services.response_policy_service import select_response_variant
 from app.services.response_postcheck_service import postcheck_rendered_response
+from app.services.response_provider_service import MockResponseGeneratorProvider
 from app.services.response_service import render_supportive_response
 
 
@@ -135,7 +137,7 @@ def test_follow_up_question_for_other_person_concern_centers_user_concern() -> N
         support_strategy={"support_focus": "relationship"},
     )
 
-    assert question == "What feels hardest for you about holding this with them right now?"
+    assert question == "What feels heaviest here for you?"
 
 
 def test_postcheck_keeps_distinct_follow_up_for_other_person_concern() -> None:
@@ -186,3 +188,55 @@ def test_postcheck_drops_redundant_suggestion_text() -> None:
     )
 
     assert repaired["suggestion_text"] is None
+
+
+def test_supportive_reflective_variant_stays_empathy_only_for_low_energy_update() -> None:
+    variant = select_response_variant(
+        risk_level="low",
+        response_mode="supportive_reflective",
+        quote_allowed=False,
+        suggestion_allowed=False,
+        follow_up_question_allowed=True,
+        render_context={
+            "event_type": "exhaustion_or_flatness",
+            "low_energy_update": True,
+            "reflective_checkin": False,
+            "short_personal_update": True,
+            "positive_personal_update": False,
+        },
+        normalized_state={},
+        support_strategy={"support_focus": "user"},
+    )
+
+    assert variant == "empathy_only"
+
+
+def test_mock_provider_uses_lighter_supportive_reflection_for_ordinary_day() -> None:
+    payload = MockResponseGeneratorProvider().generate(
+        transcript="Today was pretty ordinary.",
+        emotion_analysis={
+            "language": "en",
+            "response_mode": "supportive_reflective",
+            "primary_label": "neutral",
+            "dominant_signals": [],
+        },
+        topic_tags=["daily life"],
+        response_plan={
+            "acknowledgment_focus": "mixed_state",
+            "response_variant": "empathy_only",
+            "render_context": {
+                "event_type": "uncertain_mixed_state",
+                "short_personal_update": True,
+                "reflective_checkin": False,
+                "low_energy_update": False,
+                "positive_personal_update": False,
+                "user_stance": "processing_self",
+            },
+            "support_strategy": {"support_focus": "user"},
+            "suggestion_family": None,
+        },
+        memory_summary=None,
+    )
+
+    assert payload["payload"]["empathetic_text"] == "A quieter day still counts."
+    assert payload["payload"]["follow_up_question"] is None

@@ -20,6 +20,12 @@ class CreateTextCheckinRequest(BaseModel):
     user_id: str | None = None
 
 
+class TranscribeAudioResponse(BaseModel):
+    transcript: str = Field(min_length=1)
+    confidence: float | None = None
+    provider: str
+
+
 class EmotionAnalysisResponse(BaseModel):
     primary_label: str | None
     secondary_labels: list[str] = Field(default_factory=list)

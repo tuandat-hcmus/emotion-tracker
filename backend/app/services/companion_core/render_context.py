@@ -10,6 +10,9 @@ def _dedupe(items: list[str]) -> list[str]:
 _NAMED_TARGET_RE = re.compile(
     r"^\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+(?:seems|looks|is)\s+(?:sad|angry|upset|mad|hurt|ill|sick|stressed|anxious|overwhelmed|down)\b"
 )
+_OTHER_PERSON_STATE_RE = re.compile(
+    r"\b(?:seems|looks|appears|is)\s+(?:really\s+|so\s+|very\s+)?(sad|angry|upset|mad|hurt|ill|sick|stressed|anxious|overwhelmed|down)\b"
+)
 
 
 def _extract_named_target(text: str) -> str | None:
@@ -20,6 +23,13 @@ def _extract_named_target(text: str) -> str | None:
     if candidate.casefold() in {"i", "my"}:
         return None
     return candidate
+
+
+def _extract_other_person_emotion_word(text: str) -> str | None:
+    match = _OTHER_PERSON_STATE_RE.search(text.casefold())
+    if not match:
+        return None
+    return match.group(1)
 
 
 def detect_render_context(text: str, topic_tags: list[str], context_tag: str | None = None) -> RenderContext:
@@ -52,6 +62,7 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
     }
     health_terms = ("sick", "ill", "fever", "hospital", "hurt", "not well", "unwell", "doctor")
     deadline_terms = ("deadline", "deadlines", "due", "assignment", "exam", "project", "packed tight", "piling up")
+    completion_terms = ("finally", "finished", "done", "submitted", "got it done", "completed")
     loneliness_terms = ("left behind", "left out", "lonely", "lạc lõng", "alone", "hard to reach", "disconnected")
     low_energy_terms = ("tired", "drained", "low on battery", "empty", "flat", "exhausted", "numb", "slower")
     appreciation_terms = (
@@ -94,6 +105,7 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
         "missed deadline",
     )
     mixed_terms = ("at the same time", "weirdly", "not sure", "mixed", "both", "part of me")
+    greeting_terms = ("hello", "hi", "hey", "good morning", "good evening", "good afternoon")
     other_person_state_terms = (
         "angry",
         "upset",
@@ -142,6 +154,7 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
 
     health_matches = _match_terms(health_terms)
     deadline_matches = _match_terms(deadline_terms)
+    completion_matches = _match_terms(completion_terms)
     loneliness_matches = _match_terms(loneliness_terms)
     low_energy_matches = _match_terms(low_energy_terms)
     appreciation_matches = _match_terms(appreciation_terms)
@@ -153,7 +166,9 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
     mixed_matches = _match_terms(mixed_terms)
     distress_matches = _match_terms(distress_terms)
     other_person_state_matches = _match_terms(other_person_state_terms)
+    greeting_matches = [term for term in greeting_terms if normalized == term]
     explicit_other_state = any(phrase in normalized for phrase in ("seems ", "looks ", "appears "))
+    other_person_emotion_word = _extract_other_person_emotion_word(text)
     self_responsibility_markers = any(
         phrase in normalized
         for phrase in (
@@ -172,6 +187,7 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
     evidence_spans.extend(
         health_matches
         + deadline_matches
+        + completion_matches
         + loneliness_matches
         + low_energy_matches
         + appreciation_matches
@@ -181,6 +197,7 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
         + mixed_matches
         + distress_matches
         + other_person_state_matches
+        + greeting_matches
     )
 
     relationship_concern = relationship_target is not None
@@ -194,8 +211,15 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
     short_personal_update = len(tokens) <= 6
     short_event_flag = short_personal_update and not distress_checkin
     other_person_state_mentioned = relationship_concern and (bool(other_person_state_matches) or explicit_other_state)
+    greeting_only = bool(greeting_matches) and len(tokens) <= 3 and not relationship_concern and not distress_checkin
 
-    if relationship_concern and health_related_update:
+    deadline_relief = bool(deadline_matches) and bool(completion_matches)
+
+    if greeting_only:
+        utterance_type = "short_personal_update"
+        event_type = "greeting_or_opening"
+        user_stance = "seeking_contact"
+    elif relationship_concern and health_related_update:
         utterance_type = "relationship_concern"
         event_type = "loved_one_unwell"
         user_stance = "worried_about_other"
@@ -222,6 +246,10 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
     elif low_energy_update:
         utterance_type = "low_energy_update"
         event_type = "exhaustion_or_flatness"
+        user_stance = "processing_self"
+    elif deadline_relief:
+        utterance_type = "short_personal_update" if short_personal_update else "reflective_checkin"
+        event_type = "relief_or_gratitude"
         user_stance = "processing_self"
     elif deadline_matches:
         utterance_type = "distress_checkin" if distress_checkin else "reflective_checkin"
@@ -272,6 +300,12 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
     elif context_tag and context_tag.strip():
         social_context = context_tag.strip().replace(" ", "_")
 
+    emotion_owner_hint = "user"
+    if event_type in {"other_person_distress", "loved_one_unwell"}:
+        emotion_owner_hint = "other_person"
+    elif relationship_concern and other_person_state_mentioned:
+        emotion_owner_hint = "mixed"
+
     return RenderContext(
         utterance_type=utterance_type,
         event_type=event_type,
@@ -291,6 +325,9 @@ def detect_render_context(text: str, topic_tags: list[str], context_tag: str | N
         social_context=social_context,
         concern_target=relationship_target,
         other_person_state_mentioned=other_person_state_mentioned,
+        other_person_emotion_word=other_person_emotion_word,
+        emotion_owner_hint=emotion_owner_hint,
+        greeting_only=greeting_only,
         suggestion_allowed=True,
         evidence_spans=_dedupe(evidence_spans),
     )

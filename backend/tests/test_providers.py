@@ -6,6 +6,7 @@ from app.services.provider_errors import ProviderConfigurationError, ProviderExe
 from app.services.stt_service import MockSpeechToTextProvider, get_stt_provider
 from app.services.ai_core.text_emotion_service import infer_text_emotion
 from types import SimpleNamespace
+import json
 
 
 def _stub_en_demo_dependencies(monkeypatch, settings_factory, *, gemini_api_key: str | None, ai_render_debug: bool = True):
@@ -170,6 +171,50 @@ def test_mock_response_provider_selected_by_default(monkeypatch, settings_factor
     provider = get_response_generator_provider()
 
     assert isinstance(provider, MockResponseGeneratorProvider)
+
+
+def test_gemini_render_retries_transient_503_and_stays_gemini(monkeypatch) -> None:
+    import app.services.gemini_render_service as gemini_render_service_module
+
+    class FakeModels:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate_content(self, **_kwargs):
+            self.calls += 1
+            if self.calls < 3:
+                raise RuntimeError("503 UNAVAILABLE. high demand")
+            return SimpleNamespace(
+                text=json.dumps(
+                    {
+                        "empathetic_text": "That sounds heavy right now.",
+                        "follow_up_question": None,
+                        "suggestion_text": None,
+                        "quote_text": None,
+                        "composed_text": "That sounds heavy right now.",
+                    }
+                )
+            )
+
+    fake_models = FakeModels()
+    service = gemini_render_service_module.GeminiRenderService.__new__(gemini_render_service_module.GeminiRenderService)
+    service._client = SimpleNamespace(models=fake_models)
+    service._model = "gemini-2.5-flash"
+    service._structured_output = True
+
+    monkeypatch.setattr(gemini_render_service_module.time, "sleep", lambda _seconds: None)
+
+    payload = service.render(
+        transcript="I feel stressed because work deadlines are piling up.",
+        emotion_analysis={"language": "en", "primary_label": "sadness"},
+        topic_tags=["work/school"],
+        response_plan={"response_variant": "empathy_only"},
+        memory_summary=None,
+    )
+
+    assert fake_models.calls == 3
+    assert payload["debug"]["renderer_selected"] == "gemini"
+    assert payload["payload"]["empathetic_text"] == "That sounds heavy right now."
 
 
 def test_text_emotion_falls_back_cleanly_without_transformers(monkeypatch, settings_factory) -> None:

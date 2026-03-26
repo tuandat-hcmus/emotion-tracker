@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -11,6 +11,7 @@ from app.schemas.me import (
     CalendarResponse,
     CheckinStatusResponse,
     HomeResponse,
+    MonthlyWrapupDetailResponse,
     PreferenceResponse,
     UpdateMeRequest,
     UpsertPreferenceRequest,
@@ -23,7 +24,12 @@ from app.services.home_service import build_home_response
 from app.services.preferences_service import get_or_create_preferences, upsert_preferences
 from app.services.respond_preview_service import build_respond_preview_response
 from app.services.user_service import update_display_name
-from app.services.wrapup_service import generate_wrapup_snapshot, get_latest_wrapup_snapshot
+from app.services.wrapup_service import (
+    build_monthly_wrapup_detail,
+    generate_wrapup_snapshot,
+    get_latest_monthly_wrapup_detail,
+    get_latest_wrapup_snapshot,
+)
 
 router = APIRouter(prefix="/v1/me", tags=["me"])
 
@@ -130,6 +136,24 @@ def get_latest_monthly_wrapup(
     db: Session = Depends(get_db),
 ) -> WrapupSnapshotResponse:
     return get_latest_wrapup_snapshot(db, current_user.id, "month")
+
+
+@router.get("/wrapups/monthly/latest/detail", response_model=MonthlyWrapupDetailResponse)
+def get_latest_monthly_wrapup_detail_route(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> MonthlyWrapupDetailResponse:
+    return get_latest_monthly_wrapup_detail(db, current_user.id)
+
+
+@router.get("/wrapups/monthly/{year}/{month}", response_model=MonthlyWrapupDetailResponse)
+def get_monthly_wrapup_detail(
+    year: int = Path(..., ge=2000, le=2100),
+    month: int = Path(..., ge=1, le=12),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> MonthlyWrapupDetailResponse:
+    return build_monthly_wrapup_detail(db, current_user.id, year, month)
 
 
 @router.post("/wrapups/regenerate", response_model=WrapupSnapshotResponse)

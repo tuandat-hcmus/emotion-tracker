@@ -228,3 +228,93 @@ class WrapupSnapshotResponse(BaseModel):
 class WrapupRegenerateRequest(BaseModel):
     period_type: str = Field(pattern=r"^(week|month)$")
     anchor_date: date | None = None
+
+
+class MonthlyWrapupPeriodResponse(BaseModel):
+    year: int
+    month: int
+    label: str
+    date_from: str
+    date_to: str
+
+
+class MonthlyWrapupOverviewResponse(BaseModel):
+    summary_text: str | None = None
+    dominant_emotion: str | None = None
+    emotional_direction_trend: str = "mixed"
+    overall_checkin_count: int
+    high_stress_frequency: float
+
+
+class MonthlyWrapupHeadlineCardResponse(BaseModel):
+    id: str
+    title: str
+    subtitle: str | None = None
+    value: str | int | float | None = None
+    supporting_text: str | None = None
+    icon_key: str
+    color_token: str
+    priority: int
+    source_type: str
+
+
+class MonthlyWrapupStatsResponse(BaseModel):
+    total_checkins: int
+    active_days: int
+    avg_stress_score: float | None = None
+    top_emotion: str | None = None
+    top_trigger: str | None = None
+    top_positive_anchor: str | None = None
+    longest_gap_days: int | None = None
+    best_streak_days: int | None = None
+
+
+class MonthlyWrapupDistributionItemResponse(BaseModel):
+    label: str
+    count: int
+    percent: float
+
+
+class MonthlyWrapupWeeklyMetricResponse(BaseModel):
+    week_label: str
+    date_from: str
+    date_to: str
+    avg_stress_score: float | None = None
+    count: int
+
+
+class MonthlyWrapupDistributionsResponse(BaseModel):
+    emotion_distribution: list[MonthlyWrapupDistributionItemResponse] = Field(default_factory=list)
+    weekly_stress_trend: list[MonthlyWrapupWeeklyMetricResponse] = Field(default_factory=list)
+    weekly_checkin_counts: list[MonthlyWrapupWeeklyMetricResponse] = Field(default_factory=list)
+
+
+class MonthlyWrapupPatternItemResponse(BaseModel):
+    label: str
+    count: int
+    weight: float | None = None
+    icon_key: str
+    color_token: str
+
+
+class MonthlyWrapupPatternListsResponse(BaseModel):
+    recurring_triggers: list[MonthlyWrapupPatternItemResponse] = Field(default_factory=list)
+    positive_anchors: list[MonthlyWrapupPatternItemResponse] = Field(default_factory=list)
+    workload_deadline_patterns: list[MonthlyWrapupPatternItemResponse] = Field(default_factory=list)
+    dominant_emotional_patterns: list[MonthlyWrapupPatternItemResponse] = Field(default_factory=list)
+
+
+class MonthlyWrapupVisualHintsResponse(BaseModel):
+    month_mood_color: str
+    month_theme_icon: str
+    intensity_level: str
+
+
+class MonthlyWrapupDetailResponse(BaseModel):
+    period: MonthlyWrapupPeriodResponse
+    overview: MonthlyWrapupOverviewResponse
+    headline_cards: list[MonthlyWrapupHeadlineCardResponse] = Field(default_factory=list)
+    stats: MonthlyWrapupStatsResponse
+    distributions: MonthlyWrapupDistributionsResponse
+    pattern_lists: MonthlyWrapupPatternListsResponse
+    visual_hints: MonthlyWrapupVisualHintsResponse

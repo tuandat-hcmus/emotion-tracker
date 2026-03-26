@@ -34,9 +34,9 @@ class MockResponseGeneratorProvider:
         response_plan: dict[str, object],
         memory_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
-        del transcript
         del memory_summary
         primary_topic = topic_tags[0] if topic_tags else "daily life"
+        lowered_transcript = transcript.casefold()
         language = str(emotion_analysis.get("language", "en")).strip().lower()
         response_mode = str(emotion_analysis["response_mode"])
         acknowledgment_focus = str(response_plan.get("acknowledgment_focus", "mixed_state"))
@@ -46,7 +46,67 @@ class MockResponseGeneratorProvider:
         support_strategy = dict(response_plan.get("support_strategy", {}))
         user_stance = str(render_context.get("user_stance", ""))
         concern_target = str(render_context.get("concern_target") or "")
+        relationship_role = str(render_context.get("relationship_role") or "")
+        event_type = str(render_context.get("event_type") or "")
+        other_person_emotion_word = str(render_context.get("other_person_emotion_word") or "")
         response_goal = str(support_strategy.get("response_goal") or "")
+        short_personal_update = bool(render_context.get("short_personal_update"))
+        reflective_checkin = bool(render_context.get("reflective_checkin"))
+        low_energy_update = bool(render_context.get("low_energy_update"))
+        positive_personal_update = bool(render_context.get("positive_personal_update"))
+
+        def _target_phrase() -> str:
+            if concern_target and concern_target != "named_person":
+                return f"your {concern_target}"
+            if relationship_role == "named_person":
+                return "them"
+            return "someone you care about"
+
+        def _other_person_reflection() -> str:
+            target = _target_phrase()
+            if concern_target == "friend":
+                return "Seeing your friend seem this down can really stay with you."
+            if concern_target in {"crush", "partner", "girlfriend", "boyfriend", "wife", "husband"}:
+                observed = other_person_emotion_word or "off"
+                return f"It can feel unsettling when {target} seems {observed}."
+            observed = other_person_emotion_word or "off"
+            return f"Seeing {target} seem {observed} can sit heavily with you."
+
+        def _stress_reflection() -> str:
+            if "can't keep up" in lowered_transcript or "cannot keep up" in lowered_transcript:
+                return "Feeling like you can't keep up can get exhausting fast."
+            if "deadline" in lowered_transcript:
+                return "That deadline pressure sounds heavy."
+            return "That sounds like a lot of pressure to carry."
+
+        def _supportive_reflection() -> str:
+            if "check in" in lowered_transcript:
+                return "I'm glad you checked in."
+            if "nothing big happened" in lowered_transcript or "ordinary" in lowered_transcript or "normal day" in lowered_transcript:
+                return "A quieter day still counts."
+            if "miss " in lowered_transcript:
+                return "Missing someone can feel especially close at night."
+            if "should have" in lowered_transcript or "wish i could take it back" in lowered_transcript:
+                return "That seems to be lingering with you."
+            if "lighter than yesterday" in lowered_transcript or "a little easier" in lowered_transcript:
+                return "It sounds a little lighter today."
+            if "not as stuck" in lowered_transcript:
+                return "Even a small shift away from stuck can matter."
+            if "calmer" in lowered_transcript:
+                return "It sounds a little steadier right now."
+            if "interrupt" in lowered_transcript or "annoyed" in lowered_transcript:
+                return "That would wear on you."
+            if low_energy_update or event_type == "exhaustion_or_flatness":
+                if "empty" in lowered_transcript or "flat" in lowered_transcript:
+                    return "That sounds flat and draining."
+                return "That sounds like a low-energy kind of day."
+            if positive_personal_update:
+                return "There is something a little lighter in this."
+            if reflective_checkin:
+                return "That seems to have stayed with you."
+            if short_personal_update:
+                return "I'm here with you."
+            return "That seems to be sitting with you."
 
         if language == "vi":
             primary_topic = topic_tags[0] if topic_tags else "đời sống hằng ngày"
@@ -115,60 +175,41 @@ class MockResponseGeneratorProvider:
                 "debug": {"renderer_selected": "mock", "render_language": "vi"},
             }
 
-        if user_stance == "worried_about_other":
-            target = (
-                f"your {concern_target}"
-                if concern_target and concern_target != "named_person"
-                else "someone you care about"
-            )
-            empathetic_text = (
-                f"It can be hard to see {target} seem that weighed down. "
-                "It makes sense if part of you feels worried and a little unsure what to do next."
-            )
+        if event_type == "greeting_or_opening":
+            empathetic_text = "Hey, I'm here with you."
+        elif user_stance == "worried_about_other":
+            empathetic_text = _other_person_reflection()
         elif user_stance == "guilty_toward_other":
             empathetic_text = (
-                "It sounds like this is staying with you because you care and you wish it had gone differently. "
-                "That can feel heavy to carry on your own."
+                "This sounds like it has been sitting heavily with you."
             )
         elif response_goal == "reinforce_positive_moment" and response_mode == "celebratory_warm":
             empathetic_text = (
-                f"That sounds like a real moment of relief around {primary_topic}. "
-                "It makes sense if part of you wants to stay with that for a second."
+                "That sounds like a real exhale."
             )
         elif response_mode == "celebratory_warm":
             empathetic_text = (
-                f"I can hear a steadier, warmer note in what you shared about {primary_topic}. "
-                "That shift sounds real, and it deserves to be noticed."
+                "That sounds lighter, and in a good way."
             )
         elif response_mode == "low_energy_comfort":
             empathetic_text = (
-                f"It sounds like your energy is running low around {primary_topic}. "
-                "I want to acknowledge that tiredness without pushing you to feel different right away."
+                "That sounds quietly exhausting."
             )
         elif response_mode == "grounding_soft":
             empathetic_text = (
-                f"It sounds like the pressure around {primary_topic} is landing hard right now. "
-                "You do not need to force yourself to be okay immediately."
+                "That sounds like a lot to carry right now."
             )
         elif response_mode == "stress_supportive":
-            empathetic_text = (
-                f"It sounds like the pressure around {primary_topic} is stacking faster than you can recover from it. "
-                "When deadlines keep piling up, the feeling of not catching up can get exhausting very quickly."
-            )
+            empathetic_text = _stress_reflection()
         elif response_mode == "validating_gentle":
             empathetic_text = (
-                f"There is a lot of strain in what you shared about {primary_topic}. "
-                "That reaction makes sense and does not need to be dismissed."
+                "It makes sense that this is still with you."
             )
         else:
-            empathetic_text = (
-                f"There are a few emotional layers moving together in what you shared about {primary_topic}. "
-                "Nothing about that needs to be simplified too quickly."
-            )
+            empathetic_text = _supportive_reflection()
             if has_signal(emotion_analysis, "positive_affect") and acknowledgment_focus == "emotion_complexity":
                 empathetic_text = (
-                    f"There is something a little lighter in what you shared about {primary_topic}, even if it still has layers. "
-                    "That steadier part deserves some room too."
+                    "There is something a little lighter in this too."
                 )
 
         suggestion_text = build_suggestion_text(

@@ -15,6 +15,7 @@ def build_response_plan(
     normalized_state: dict[str, object] | None = None,
     support_strategy: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    lowered_transcript = transcript.casefold()
     plan = _build_response_plan(
         transcript=transcript,
         emotion_analysis=emotion_analysis,
@@ -38,6 +39,17 @@ def build_response_plan(
         or "uncertain_mixed_state"
     )
     support_focus = str(support_strategy_data.get("support_focus") or "user")
+    response_goal = str(support_strategy_data.get("response_goal") or "")
+    is_short_greeting = bool(render_context_data.get("greeting_only")) or event_type == "greeting_or_opening"
+    short_personal_update = bool(render_context_data.get("short_personal_update"))
+    low_energy_update = bool(render_context_data.get("low_energy_update"))
+    positive_personal_update = bool(render_context_data.get("positive_personal_update"))
+    soft_recovery_cue = any(
+        phrase in lowered_transcript
+        for phrase in ("lighter than yesterday", "a little easier", "calmer", "not as stuck")
+    )
+    quiet_grief_cue = "miss " in lowered_transcript
+    minimal_energy_cue = "got out of bed" in lowered_transcript
 
     plan["follow_up_question_allowed"] = (
         risk_level == "low"
@@ -55,19 +67,47 @@ def build_response_plan(
         plan["quote_allowed"] = False
         plan["avoid_advice"] = True
         plan["tone"] = "gentle_companion"
-        plan["max_sentences"] = min(int(plan.get("max_sentences", 3)), 2)
+        plan["max_sentences"] = 1
         plan["follow_up_question_allowed"] = (
-            risk_level == "low" and str(emotion_analysis.get("language", "en")) == "en"
+            risk_level == "low"
+            and str(emotion_analysis.get("language", "en")) == "en"
+            and len(transcript.split()) >= 4
         )
     elif user_stance == "guilty_toward_other" or event_type == "responsibility_tension":
         plan["acknowledgment_focus"] = "repair_tension"
-        plan["max_sentences"] = min(int(plan.get("max_sentences", 3)), 2)
+        plan["max_sentences"] = 1
     elif support_focus == "relationship":
-        plan["max_sentences"] = min(int(plan.get("max_sentences", 3)), 2)
+        plan["max_sentences"] = 1
+    elif is_short_greeting:
+        plan["suggestion_allowed"] = False
+        plan["quote_allowed"] = False
+        plan["follow_up_question_allowed"] = False
+        plan["avoid_advice"] = True
+        plan["max_sentences"] = 1
+    elif response_goal == "reinforce_positive_moment" or event_type == "relief_or_gratitude":
+        plan["suggestion_allowed"] = False
+        plan["follow_up_question_allowed"] = False
+        plan["max_sentences"] = 1
+    elif low_energy_update or event_type == "exhaustion_or_flatness":
+        plan["suggestion_allowed"] = False
+        plan["follow_up_question_allowed"] = False
+        plan["quote_allowed"] = False
+        plan["max_sentences"] = 1
+    elif response_mode == "supportive_reflective" and (soft_recovery_cue or quiet_grief_cue or minimal_energy_cue):
+        plan["suggestion_allowed"] = False
+        plan["follow_up_question_allowed"] = False
+        plan["quote_allowed"] = False
+        plan["max_sentences"] = 1
+    elif response_mode == "supportive_reflective" and (short_personal_update or positive_personal_update):
+        plan["suggestion_allowed"] = False
+        plan["follow_up_question_allowed"] = False
+        plan["quote_allowed"] = False
+        plan["max_sentences"] = 1
     elif len(transcript.split()) <= 2 and event_type == "uncertain_mixed_state":
         plan["suggestion_allowed"] = False
         plan["quote_allowed"] = False
         plan["max_sentences"] = 1
+        plan["follow_up_question_allowed"] = False
 
     if session_mode == "realtime":
         plan["max_sentences"] = 1

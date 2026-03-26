@@ -144,6 +144,12 @@ export type CheckinDetail = {
   created_at: string
 }
 
+export type TranscribeAudioResponse = {
+  transcript: string
+  confidence: number | null
+  provider: string
+}
+
 export type RespondPreviewResponse = {
   emotion_analysis: EmotionAnalysis
   topic_tags: string[]
@@ -332,6 +338,82 @@ export type WrapupSnapshotResponse = {
       recurring_trigger_count: number
     } | null
     closing_message: string
+  }
+}
+
+export type MonthlyWrapupHeadlineCard = {
+  id: string
+  title: string
+  subtitle: string | null
+  value: string | number | null
+  supporting_text: string | null
+  icon_key: string
+  color_token: string
+  priority: number
+  source_type: string
+}
+
+export type MonthlyWrapupPatternItem = {
+  label: string
+  count: number
+  weight: number | null
+  icon_key: string
+  color_token: string
+}
+
+export type MonthlyWrapupWeeklyMetric = {
+  week_label: string
+  date_from: string
+  date_to: string
+  avg_stress_score: number | null
+  count: number
+}
+
+export type MonthlyWrapupDetailResponse = {
+  period: {
+    year: number
+    month: number
+    label: string
+    date_from: string
+    date_to: string
+  }
+  overview: {
+    summary_text: string | null
+    dominant_emotion: string | null
+    emotional_direction_trend: string
+    overall_checkin_count: number
+    high_stress_frequency: number
+  }
+  headline_cards: MonthlyWrapupHeadlineCard[]
+  stats: {
+    total_checkins: number
+    active_days: number
+    avg_stress_score: number | null
+    top_emotion: string | null
+    top_trigger: string | null
+    top_positive_anchor: string | null
+    longest_gap_days: number | null
+    best_streak_days: number | null
+  }
+  distributions: {
+    emotion_distribution: Array<{
+      label: string
+      count: number
+      percent: number
+    }>
+    weekly_stress_trend: MonthlyWrapupWeeklyMetric[]
+    weekly_checkin_counts: MonthlyWrapupWeeklyMetric[]
+  }
+  pattern_lists: {
+    recurring_triggers: MonthlyWrapupPatternItem[]
+    positive_anchors: MonthlyWrapupPatternItem[]
+    workload_deadline_patterns: MonthlyWrapupPatternItem[]
+    dominant_emotional_patterns: MonthlyWrapupPatternItem[]
+  }
+  visual_hints: {
+    month_mood_color: string
+    month_theme_icon: string
+    intensity_level: string
   }
 }
 

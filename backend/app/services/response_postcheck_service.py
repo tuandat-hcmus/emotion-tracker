@@ -87,6 +87,34 @@ def _normalize_overlap_tokens(text: str) -> set[str]:
     }
 
 
+def _strip_repeated_lead(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    cleaned = re.sub(
+        r"^(it sounds like|it feels like|it can be hard when|it makes sense if)\s+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    return cleaned.strip()
+
+
+def _soften_template_phrasing(text: str) -> str:
+    cleaned = text.strip()
+    cleaned = re.sub(
+        r"^You're really noticing that (.+) seems ([a-z]+) right now\.$",
+        r"Seeing \1 seem \2 can really stay with you.",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"^What feels most present for you as you sit with this\?$",
+        "What feels heaviest here for you?",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    return cleaned
+
+
 def _is_redundant(candidate: str | None, *others: str | None) -> bool:
     if not candidate:
         return False
@@ -107,7 +135,7 @@ def _is_redundant(candidate: str | None, *others: str | None) -> bool:
         if not other_tokens:
             continue
         overlap = len(candidate_tokens & other_tokens) / max(len(candidate_tokens), 1)
-        if overlap >= 0.72:
+        if overlap >= 0.64:
             return True
     return False
 
@@ -215,6 +243,18 @@ def postcheck_rendered_response(
 
     if follow_up_question is not None and not follow_up_question.endswith("?"):
         follow_up_question = follow_up_question.rstrip(". ") + "?"
+
+    empathetic_text = _soften_template_phrasing(empathetic_text)
+    if follow_up_question is not None:
+        follow_up_question = _soften_template_phrasing(follow_up_question)
+
+    cleaned_empathy = _strip_repeated_lead(empathetic_text)
+    if cleaned_empathy:
+        empathetic_text = (
+            cleaned_empathy[0].upper() + cleaned_empathy[1:]
+            if len(cleaned_empathy) > 1
+            else cleaned_empathy.upper()
+        )
 
     if suggestion_text is not None and _is_redundant(suggestion_text, empathetic_text, follow_up_question):
         suggestion_text = None

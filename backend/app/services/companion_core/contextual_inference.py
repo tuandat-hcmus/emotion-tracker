@@ -5,6 +5,59 @@ def _dedupe(items: list[str]) -> list[str]:
     return list(dict.fromkeys(item for item in items if item))
 
 
+def _to_frontend_label(label: str) -> str:
+    normalized = label.strip().casefold()
+    mapping = {
+        "anger": "anger",
+        "disgust": "disgust",
+        "fear": "fear",
+        "anxiety": "fear",
+        "overwhelm": "fear",
+        "joy": "joy",
+        "gratitude": "joy",
+        "pride": "joy",
+        "relief": "joy",
+        "hope": "joy",
+        "sadness": "sadness",
+        "loneliness": "sadness",
+        "emptiness": "sadness",
+        "exhaustion": "sadness",
+        "surprise": "surprise",
+        "neutral": "neutral",
+        "calm": "neutral",
+    }
+    return mapping.get(normalized, "neutral")
+
+
+def _apply_frontend_emotion_override(
+    adjusted: dict[str, object],
+    *,
+    primary: str,
+    secondary: list[str],
+    confidence: float,
+) -> None:
+    primary_label = _to_frontend_label(primary)
+    secondary_labels = [
+        mapped
+        for item in secondary
+        if (mapped := _to_frontend_label(item)) != primary_label
+    ]
+    scores = {
+        "anger": 0.02,
+        "disgust": 0.01,
+        "fear": 0.04,
+        "joy": 0.06,
+        "sadness": 0.03,
+        "surprise": 0.02,
+        "neutral": 0.72,
+    }
+    adjusted["primary_label"] = primary_label
+    adjusted["secondary_labels"] = list(dict.fromkeys(secondary_labels))
+    adjusted["all_labels"] = [primary_label]
+    adjusted["scores"] = scores
+    adjusted["confidence"] = round(max(confidence, scores[primary_label]), 2)
+
+
 def align_emotion_analysis_with_context(
     emotion_analysis: dict[str, object],
     render_context: RenderContext,
@@ -68,6 +121,36 @@ def align_emotion_analysis_with_context(
         )
         return adjusted
 
+    if render_context.event_type == "relief_or_gratitude":
+        _apply(
+            primary="gratitude",
+            secondary=["joy", *secondary_emotions],
+            next_valence=max(valence, 0.34),
+            next_energy=max(energy, 0.34),
+            next_stress=min(stress, 0.22),
+            next_social_need=social_need,
+            response_mode="celebratory_warm",
+            next_confidence=max(confidence, 0.58),
+            extra_signals=["positive_affect", "relief_release"],
+            adjustment_name="relief_or_gratitude",
+        )
+        return adjusted
+
+    if render_context.event_type == "deadline_pressure":
+        _apply(
+            primary="overwhelm" if stress >= 0.56 else "anxiety",
+            secondary=["anxiety", *secondary_emotions],
+            next_valence=min(valence, -0.34),
+            next_energy=max(energy, 0.46),
+            next_stress=max(stress, 0.62),
+            next_social_need=social_need,
+            response_mode="stress_supportive",
+            next_confidence=max(confidence, 0.6),
+            extra_signals=["overwhelm_load", "deadline_pressure"],
+            adjustment_name="deadline_pressure",
+        )
+        return adjusted
+
     if render_context.event_type == "other_person_distress":
         _apply(
             primary="anxiety",
@@ -77,8 +160,8 @@ def align_emotion_analysis_with_context(
             next_stress=max(stress, 0.42),
             next_social_need=max(social_need, 0.24),
             response_mode="supportive_reflective",
-            next_confidence=max(confidence, 0.56),
-            extra_signals=["anxiety_activation", "connection_need"],
+            next_confidence=max(confidence, 0.52),
+            extra_signals=["anxiety_activation", "connection_need", "care_for_other"],
             adjustment_name="other_person_distress",
         )
         return adjusted
@@ -93,7 +176,7 @@ def align_emotion_analysis_with_context(
             next_social_need=max(social_need, 0.3),
             response_mode="supportive_reflective",
             next_confidence=max(confidence, 0.58),
-            extra_signals=["anxiety_activation", "connection_need"],
+            extra_signals=["anxiety_activation", "connection_need", "care_for_other"],
             adjustment_name="loved_one_unwell",
         )
         return adjusted
@@ -139,8 +222,29 @@ def align_emotion_analysis_with_context(
             next_stress=max(stress, 0.38),
             next_social_need=max(social_need, 0.2),
             response_mode="supportive_reflective",
-            next_confidence=max(confidence, 0.54),
-            extra_signals=["anxiety_activation"],
+            next_confidence=max(confidence, 0.5),
+            extra_signals=["anxiety_activation", "care_for_other"],
             adjustment_name="worried_about_other",
+        )
+        return adjusted
+
+    if render_context.event_type == "greeting_or_opening":
+        _apply(
+            primary="neutral",
+            secondary=secondary_emotions,
+            next_valence=max(valence, 0.0),
+            next_energy=max(energy, 0.24),
+            next_stress=min(stress, 0.18),
+            next_social_need=max(social_need, 0.12),
+            response_mode="supportive_reflective",
+            next_confidence=max(confidence, 0.48),
+            extra_signals=["gentle_opening"],
+            adjustment_name="greeting_or_opening",
+        )
+        _apply_frontend_emotion_override(
+            adjusted,
+            primary="neutral",
+            secondary=[],
+            confidence=max(confidence, 0.48),
         )
     return adjusted

@@ -11,10 +11,11 @@ def select_suggestion_family(
     support_strategy: dict[str, object] | None = None,
 ) -> str | None:
     user_stance = str((render_context or {}).get("user_stance") or (normalized_state or {}).get("user_stance") or "")
+    event_type = str((render_context or {}).get("event_type") or (normalized_state or {}).get("event_type") or "")
 
     if not suggestion_allowed:
         return None
-    if user_stance == "worried_about_other":
+    if user_stance == "worried_about_other" or event_type == "greeting_or_opening":
         return None
     if response_mode == "stress_supportive":
         return "scope_narrowing"
@@ -41,15 +42,40 @@ def select_response_variant(
     support_strategy: dict[str, object] | None = None,
 ) -> str:
     user_stance = str((render_context or {}).get("user_stance") or (normalized_state or {}).get("user_stance") or "")
+    event_type = str((render_context or {}).get("event_type") or (normalized_state or {}).get("event_type") or "")
     support_focus = str((support_strategy or {}).get("support_focus") or "")
+    response_goal = str((support_strategy or {}).get("response_goal") or "")
+    short_personal_update = bool((render_context or {}).get("short_personal_update"))
+    reflective_checkin = bool((render_context or {}).get("reflective_checkin"))
+    distress_checkin = bool((render_context or {}).get("distress_checkin"))
+    low_energy_update = bool((render_context or {}).get("low_energy_update"))
+    positive_personal_update = bool((render_context or {}).get("positive_personal_update"))
 
     if risk_level != "low":
+        return "empathy_only"
+    if event_type == "greeting_or_opening":
+        return "empathy_only"
+    if response_goal == "reinforce_positive_moment":
         return "empathy_only"
     if user_stance == "worried_about_other" or support_focus == "relationship":
         return "empathy_plus_followup" if follow_up_question_allowed else "empathy_only"
     if quote_allowed and response_mode == "celebratory_warm":
         return "empathy_plus_quote"
-    if follow_up_question_allowed and response_mode in {"stress_supportive", "supportive_reflective", "validating_gentle"}:
+    if response_mode == "supportive_reflective":
+        if not follow_up_question_allowed:
+            return "empathy_only"
+        if short_personal_update or low_energy_update or positive_personal_update:
+            return "empathy_only"
+        if reflective_checkin or distress_checkin:
+            return "empathy_plus_followup"
+        return "empathy_only"
+    if response_mode == "validating_gentle":
+        if not follow_up_question_allowed:
+            return "empathy_only"
+        if short_personal_update or low_energy_update:
+            return "empathy_only"
+        return "empathy_plus_followup"
+    if follow_up_question_allowed and response_mode == "stress_supportive":
         return "empathy_plus_followup"
     if suggestion_allowed:
         return "empathy_plus_suggestion"
@@ -103,35 +129,57 @@ def build_follow_up_question(
     state = normalized_state or {}
     user_stance = str(context.get("user_stance") or state.get("user_stance") or "")
     event_type = str(context.get("event_type") or state.get("event_type") or "")
+    concern_target = str(context.get("concern_target") or state.get("concern_target") or "")
+    relationship_role = str(context.get("relationship_role") or state.get("relationship_role") or "")
+    evidence_spans = [str(item) for item in context.get("evidence_spans") or state.get("evidence_spans") or []]
+    joined_evidence = " ".join(evidence_spans).casefold()
 
     if user_stance == "worried_about_other" or event_type in {"other_person_distress", "loved_one_unwell"}:
+        if concern_target in {"friend", "sister", "brother", "mom", "mother", "dad", "father"}:
+            return (
+                "Điều gì đang làm bạn lo nhất cho họ lúc này?"
+                if language == "vi"
+                else "What are you most worried about here?"
+            )
+        if concern_target in {"crush", "partner", "girlfriend", "boyfriend", "wife", "husband"} or relationship_role == "named_person":
+            return (
+                "Phần nào của chuyện này vẫn còn ở lại với bạn nhiều nhất?"
+                if language == "vi"
+                else "What part of this is staying with you most?"
+            )
         return (
-            "Lúc này điều gì khó nhất với bạn khi đang chứng kiến chuyện đó ở họ?"
+            "Lúc này điều gì đang nặng nhất với bạn ở chuyện này?"
             if language == "vi"
-            else "What feels hardest for you about holding this with them right now?"
+            else "What feels heaviest here for you?"
         )
     if user_stance == "guilty_toward_other" or event_type == "responsibility_tension":
         return (
-            "Lúc này phần nào đang nặng nhất để bạn phải mang theo?"
+            "Phần nào của chuyện này vẫn còn nằm trong đầu bạn?"
             if language == "vi"
-            else "What feels heaviest for you to carry in this right now?"
+            else "What part of this is staying with you most?"
         )
     if response_mode == "stress_supportive":
+        if "keep up" in joined_evidence or "pressure" in joined_evidence:
+            return (
+                "Lúc này nặng hơn ở áp lực đó, hay ở cảm giác mình đang hụt lại?"
+                if language == "vi"
+                else "Is it the pressure itself, or the feeling of falling behind?"
+            )
         return (
-            "Lúc này điều nào đang nặng nhất: khối lượng công việc, độ gấp, hay cảm giác mình không theo kịp?"
+            "Lúc này điều gì đang nặng nhất?"
             if language == "vi"
-            else "What feels heaviest right now: the amount of work, the urgency, or the feeling of falling behind?"
+            else "What feels heaviest right now?"
         )
     if response_mode == "validating_gentle":
         return (
-            "Phần nào của chuyện này đang làm bạn căng nhất lúc này?"
+            "Phần nào của chuyện này vẫn còn vướng ở bạn?"
             if language == "vi"
-            else "What feels most charged about this right now?"
+            else "What part of this still stings most?"
         )
     if response_mode == "supportive_reflective":
         return (
-            "Phần nào của chuyện này thấy đáng để nói ra thêm một chút lúc này?"
+            "Nếu muốn, phần nào thấy khó nói nhất?"
             if language == "vi"
-            else "What feels most important to name a little more clearly right now?"
+            else "What feels hardest to say out loud?"
         )
     return None

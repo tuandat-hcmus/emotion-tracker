@@ -16,6 +16,7 @@ from app.schemas.checkin import (
     ProcessCheckinRequest,
     ProcessingAttemptItemResponse,
     ProcessingAttemptListResponse,
+    TranscribeAudioResponse,
     UploadCheckinResponse,
 )
 from app.services.checkin_entry_service import get_entry_or_404, serialize_entry
@@ -27,7 +28,9 @@ from app.services.checkin_processing_service import (
     process_entry_in_background,
     remove_entry_audio,
 )
+from app.services.provider_errors import ProviderConfigurationError, ProviderExecutionError
 from app.services.storage_service import save_upload_file, validate_upload_file
+from app.services.stt_service import get_stt_provider_name, transcribe_audio
 from app.services.tree_service import recompute_tree_for_user
 
 router = APIRouter(prefix="/v1/checkins", tags=["checkins"])
@@ -43,6 +46,18 @@ def _raise_processing_http_error(exc: Exception) -> None:
     if isinstance(exc, ProviderExecutionError):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     raise exc
+
+
+def _friendly_transcription_upload_error(exc: ValueError) -> str:
+    message = str(exc).lower()
+
+    if "max size" in message:
+        return "That recording is too long to process. Please try a shorter message."
+
+    if "extension" in message or "mime type" in message or "name" in message:
+        return "That recording format could not be used. Please try recording again."
+
+    return "That recording could not be prepared. Please try again."
 
 
 @router.post("/upload", response_model=UploadCheckinResponse, status_code=status.HTTP_201_CREATED)
@@ -85,6 +100,72 @@ def upload_checkin(
     db.refresh(entry)
 
     return UploadCheckinResponse(entry_id=entry.id, status=entry.processing_status, source_type="voice")
+
+
+@router.post("/transcribe", response_model=TranscribeAudioResponse)
+def transcribe_checkin_audio(
+    file: UploadFile = File(...),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> TranscribeAudioResponse:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+
+    if current_user is None and not settings.auth_optional_for_dev:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization required")
+
+    if get_stt_provider_name() == "mock":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Voice transcription is unavailable right now. Please type your message instead.",
+        )
+
+    audio_path: str | None = None
+
+    try:
+        validate_upload_file(file)
+        audio_path = save_upload_file(file, settings.uploads_dir)
+        transcript, confidence = transcribe_audio(audio_path)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_friendly_transcription_upload_error(exc),
+        ) from exc
+    except ProviderConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Voice transcription is unavailable right now. Please type your message instead.",
+        ) from exc
+    except ProviderExecutionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="We couldn't turn that recording into text. Please try again.",
+        ) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="That recording could not be prepared. Please try again.",
+        ) from exc
+    finally:
+        file.file.close()
+        if audio_path:
+            try:
+                remove_entry_audio(audio_path)
+            except OSError:
+                pass
+
+    normalized_transcript = transcript.strip()
+    if not normalized_transcript:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="We couldn't hear enough to turn that into text. Please try again.",
+        )
+
+    return TranscribeAudioResponse(
+        transcript=normalized_transcript,
+        confidence=confidence,
+        provider=get_stt_provider_name(),
+    )
 
 
 @router.post("/text", response_model=CheckinDetailResponse, status_code=status.HTTP_201_CREATED)

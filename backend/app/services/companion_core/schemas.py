@@ -48,6 +48,9 @@ class RenderContext(BaseModel):
     social_context: str = "solo"
     concern_target: str | None = None
     other_person_state_mentioned: bool = False
+    other_person_emotion_word: str | None = None
+    emotion_owner_hint: str = "user"
+    greeting_only: bool = False
     suggestion_allowed: bool = True
     evidence_spans: list[str] = Field(default_factory=list)
 
