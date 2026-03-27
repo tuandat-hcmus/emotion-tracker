@@ -1,6 +1,9 @@
 from io import BytesIO
 from datetime import datetime, timezone
 
+from app.main import app
+from app.models.journal_entry import JournalEntry
+
 
 def _register_and_login(client, email: str, password: str = "secret123", display_name: str | None = None) -> dict[str, str]:
     payload = {"email": email, "password": password}
@@ -39,6 +42,7 @@ def test_new_me_endpoints_require_auth(strict_client) -> None:
         "/v1/me/home",
         "/v1/me/checkin-status",
         "/v1/me/calendar",
+        "/v1/me/journal/month?year=2026&month=3",
         "/v1/me/wrapups/weekly/latest",
         "/v1/me/wrapups/monthly/latest",
         "/v1/me/wrapups/monthly/latest/detail",
@@ -149,6 +153,61 @@ def test_calendar_returns_semantic_mood_tokens(strict_client) -> None:
     assert response.status_code == 200
     token = response.json()["items"][0]["mood_color_token"]
     assert token in {"bright", "calm", "neutral", "low", "heavy"}
+
+
+def test_journal_month_uses_local_date_boundaries_for_entries_and_calendar(strict_client) -> None:
+    headers = _register_and_login(strict_client, "journal-month@example.com")
+    preferences_response = strict_client.put(
+        "/v1/me/preferences",
+        headers=headers,
+        json={
+            "locale": "en",
+            "timezone": "America/Los_Angeles",
+            "quote_opt_in": True,
+            "reminder_enabled": False,
+            "reminder_time": None,
+            "preferred_tree_type": "default",
+            "checkin_goal_per_day": 1,
+        },
+    )
+    assert preferences_response.status_code == 200
+
+    february_entry_id = _upload_entry(strict_client, headers)
+    march_entry_id = _upload_entry(strict_client, headers)
+    _process_entry(strict_client, february_entry_id, headers, "I still feel heavy from work stress.")
+    _process_entry(strict_client, march_entry_id, headers, "I feel calmer and more hopeful today.")
+
+    testing_session_local = app.state.testing_session_local
+    with testing_session_local() as db:
+        entries = {
+            entry.id: entry
+            for entry in db.query(JournalEntry).all()
+        }
+        entries[february_entry_id].created_at = datetime(2026, 3, 1, 1, 30, tzinfo=timezone.utc)
+        entries[march_entry_id].created_at = datetime(2026, 3, 1, 9, 30, tzinfo=timezone.utc)
+        db.commit()
+
+    february_response = strict_client.get("/v1/me/journal/month?year=2026&month=2", headers=headers)
+    march_response = strict_client.get("/v1/me/journal/month?year=2026&month=3", headers=headers)
+
+    assert february_response.status_code == 200
+    assert march_response.status_code == 200
+
+    february_payload = february_response.json()
+    march_payload = march_response.json()
+
+    assert february_payload["period"]["date_from"] == "2026-02-01"
+    assert february_payload["period"]["date_to"] == "2026-02-28"
+    assert [item["entry_id"] for item in february_payload["entries"]] == [february_entry_id]
+    assert february_payload["entries"][0]["local_date"] == "2026-02-28"
+    assert next(item for item in february_payload["calendar_items"] if item["date"] == "2026-02-28")["entry_count"] == 1
+
+    assert march_payload["period"]["date_from"] == "2026-03-01"
+    assert march_payload["period"]["date_to"] == "2026-03-31"
+    assert [item["entry_id"] for item in march_payload["entries"]] == [march_entry_id]
+    assert march_payload["entries"][0]["local_date"] == "2026-03-01"
+    assert next(item for item in march_payload["calendar_items"] if item["date"] == "2026-03-01")["entry_count"] == 1
+    assert march_payload["monthly_wrapup"] is None
 
 
 def test_wrapup_regenerate_creates_and_upserts_snapshot(strict_client) -> None:

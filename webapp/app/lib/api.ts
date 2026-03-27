@@ -8,6 +8,7 @@ import type {
   ConversationTurnResult,
   HomeResponse,
   JournalHistoryResponse,
+  JournalMonthResponse,
   LoginResponse,
   MonthlyWrapupDetailResponse,
   RegisterRequest,
@@ -65,6 +66,14 @@ export function isMockApiModeActive(token?: string | null) {
   return isFallbackForced() || runtimeMockModeActive || isMockToken(token)
 }
 
+function canAutoFallbackToMock(token?: string | null) {
+  if (isFallbackForced() || isMockToken(token)) {
+    return true
+  }
+
+  return !token
+}
+
 export function getWebSocketBaseUrl() {
   const baseUrl = getApiBaseUrl()
 
@@ -88,8 +97,11 @@ async function requestJsonWithFallback<T>(
   options: RequestOptions = {},
   fallback?: (() => Promise<T> | T) | null
 ) {
-  if (fallback && isMockApiModeActive(options.token)) {
-    return await fallback()
+  const allowFallback = Boolean(fallback && canAutoFallbackToMock(options.token))
+  const fallbackHandler = allowFallback ? fallback : null
+
+  if (allowFallback && isMockApiModeActive(options.token)) {
+    return await fallbackHandler!()
   }
 
   const headers = new Headers(options.headers)
@@ -116,9 +128,9 @@ async function requestJsonWithFallback<T>(
       signal: options.signal,
     })
   } catch (error) {
-    if (fallback) {
+    if (allowFallback) {
       setRuntimeMockModeActive(true)
-      return await fallback()
+      return await fallbackHandler!()
     }
 
     throw error
@@ -142,6 +154,10 @@ async function requestJsonWithFallback<T>(
       payload?.detail || payload?.message || `Request failed with ${response.status}`,
       response.status
     )
+  }
+
+  if (!isFallbackForced() && !isMockToken(options.token)) {
+    setRuntimeMockModeActive(false)
   }
 
   return (await response.json()) as T
@@ -258,6 +274,41 @@ export const api = {
         token,
       },
       () => mockApi.getLatestMonthlyWrapup(token)
+    )
+  },
+  getJournalMonth(token: string, year: number, month: number) {
+    return requestJsonWithFallback<JournalMonthResponse>(
+      `/v1/me/journal/month?year=${year}&month=${month}`,
+      { token },
+      async () => {
+        const [calendar, history, monthlyWrapup] = await Promise.all([
+          mockApi.getCalendar(token, 31),
+          mockApi.getHistory(token, "mock-user", 120, 0),
+          mockApi.getLatestMonthlyWrapup(token),
+        ])
+        return {
+          period: {
+            year,
+            month,
+            label: new Date(year, month - 1, 1).toLocaleDateString([], {
+              month: "long",
+              year: "numeric",
+            }),
+            date_from: new Date(year, month - 1, 1).toISOString().slice(0, 10),
+            date_to: new Date(year, month, 0).toISOString().slice(0, 10),
+          },
+          calendar_items: calendar.items.filter((item) => item.date.startsWith(`${year}-${String(month).padStart(2, "0")}`)),
+          entries: history.items
+            .map((item) => ({
+              ...item,
+              local_date: item.created_at.slice(0, 10),
+            }))
+            .filter((item) => item.local_date.startsWith(`${year}-${String(month).padStart(2, "0")}`)),
+          monthly_wrapup: monthlyWrapup.period_start.startsWith(`${year}-${String(month).padStart(2, "0")}`)
+            ? monthlyWrapup
+            : null,
+        }
+      }
     )
   },
   getLatestMonthlyWrapupDetail(token: string) {

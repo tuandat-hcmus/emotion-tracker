@@ -28,17 +28,79 @@ type ConversationMode =
   | "processing"
   | "ai_replying"
 
+type RecorderState =
+  | "idle"
+  | "requesting_permission"
+  | "recording"
+  | "stopping"
+  | "transcribing"
+  | "error"
+
 const aiPrompts = [
   "What specific moment from today still feels unfinished?",
   "What did your body do when that moment landed?",
   "What would feel supportive for the next hour, not the whole week?",
 ] as const
 
-const transcriptPlaceholders = [
-  "I kept trying to stay composed, but the afternoon felt heavier than I expected.",
-  "I noticed my chest tighten after that conversation, and I carried it longer than I wanted.",
-  "By evening I finally had a quiet moment, and that gave me enough room to breathe again.",
-] as const
+type SelectedMimeType = {
+  extension: string
+  mimeType: string | undefined
+}
+
+const MIME_TYPE_CANDIDATES: SelectedMimeType[] = [
+  { mimeType: "audio/webm;codecs=opus", extension: "webm" },
+  { mimeType: "audio/webm", extension: "webm" },
+  { mimeType: "audio/ogg;codecs=opus", extension: "ogg" },
+  { mimeType: "audio/ogg", extension: "ogg" },
+  { mimeType: "audio/mp4", extension: "m4a" },
+  { mimeType: undefined, extension: "webm" },
+]
+
+function selectRecorderMimeType(): SelectedMimeType {
+  if (typeof MediaRecorder === "undefined") {
+    return MIME_TYPE_CANDIDATES[MIME_TYPE_CANDIDATES.length - 1]!
+  }
+
+  for (const candidate of MIME_TYPE_CANDIDATES) {
+    if (!candidate.mimeType) {
+      return candidate
+    }
+
+    if (typeof MediaRecorder.isTypeSupported !== "function") {
+      return candidate
+    }
+
+    if (MediaRecorder.isTypeSupported(candidate.mimeType)) {
+      return candidate
+    }
+  }
+
+  return MIME_TYPE_CANDIDATES[MIME_TYPE_CANDIDATES.length - 1]!
+}
+
+function buildMicrophoneError(error: unknown) {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError" || error.name === "SecurityError") {
+      return "Microphone access is off. Allow it in your browser to speak your reflection."
+    }
+
+    if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      return "No microphone was found on this device."
+    }
+
+    if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+      return "Your microphone is busy or unavailable right now."
+    }
+
+    if (error.name === "AbortError") {
+      return "Recording was interrupted before it could start."
+    }
+  }
+
+  return error instanceof Error
+    ? error.message
+    : "Microphone recording could not start."
+}
 
 function ListeningWaveform() {
   return (
@@ -105,13 +167,187 @@ export function InteractiveVoiceModal({
   const socketRef = useRef<WebSocket | null>(null)
   const sessionIdRef = useRef<string | null>(null)
   const isClosingSessionRef = useRef(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<BlobPart[]>([])
+  const extensionRef = useRef("webm")
+  const isMountedRef = useRef(true)
   const [mode, setMode] = useState<ConversationMode>("connecting")
+  const [recorderState, setRecorderState] = useState<RecorderState>("idle")
   const [promptIndex, setPromptIndex] = useState(0)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
-  const [transcript, setTranscript] = useState<string>(transcriptPlaceholders[0])
+  const [transcript, setTranscript] = useState<string>("")
   const [result, setResult] = useState<ConversationTurnResult | null>(null)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+
+  function cleanupRecorder() {
+    mediaRecorderRef.current = null
+    chunksRef.current = []
+
+    const stream = streamRef.current
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop())
+    }
+
+    streamRef.current = null
+  }
+
+  function updateRecorderState(nextState: RecorderState) {
+    if (!isMountedRef.current) {
+      return
+    }
+
+    setRecorderState(nextState)
+  }
+
+  async function transcribeRecording(audioBlob: Blob, extension: string) {
+    if (!token) {
+      throw new Error("Please sign in before using the microphone.")
+    }
+
+    const file = new File([audioBlob], `conversation-turn.${extension}`, {
+      type: audioBlob.type || "audio/webm",
+    })
+
+    updateRecorderState("transcribing")
+    setMode("processing")
+
+    const response = await api.transcribeCheckinAudio(token, file)
+    const nextTranscript = response.transcript.trim()
+
+    if (!nextTranscript) {
+      throw new Error("No words came through clearly enough to transcribe. Please try again.")
+    }
+
+    if (!isMountedRef.current) {
+      return
+    }
+
+    setTranscript(nextTranscript)
+    setConnectionError(null)
+    setMode("review")
+    updateRecorderState("idle")
+  }
+
+  async function startRecording() {
+    if (
+      typeof window === "undefined" ||
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === "undefined"
+    ) {
+      setConnectionError("Voice recording is not supported in this browser.")
+      setMode("review")
+      updateRecorderState("error")
+      return
+    }
+
+    if (
+      recorderState === "requesting_permission" ||
+      recorderState === "recording" ||
+      recorderState === "stopping" ||
+      recorderState === "transcribing"
+    ) {
+      return
+    }
+
+    cleanupRecorder()
+    setTranscript("")
+    setResult(null)
+    setRecordingSeconds(0)
+    setConnectionError(null)
+    updateRecorderState("requesting_permission")
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      })
+
+      const selection = selectRecorderMimeType()
+      const recorder = selection.mimeType
+        ? new MediaRecorder(stream, { mimeType: selection.mimeType })
+        : new MediaRecorder(stream)
+
+      streamRef.current = stream
+      mediaRecorderRef.current = recorder
+      chunksRef.current = []
+      extensionRef.current = selection.extension
+
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data)
+        }
+      })
+
+      recorder.addEventListener("error", () => {
+        cleanupRecorder()
+        setConnectionError("Recording stopped unexpectedly. Please try again.")
+        setMode("review")
+        updateRecorderState("error")
+      })
+
+      recorder.addEventListener("stop", () => {
+        const audioBlob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || selection.mimeType || "audio/webm",
+        })
+
+        cleanupRecorder()
+
+        if (audioBlob.size === 0) {
+          setConnectionError("We couldn't hear anything to transcribe. Please try again.")
+          setMode("review")
+          updateRecorderState("error")
+          return
+        }
+
+        void transcribeRecording(audioBlob, selection.extension).catch((error) => {
+          if (!isMountedRef.current) {
+            return
+          }
+
+          setConnectionError(
+            error instanceof Error
+              ? error.message
+              : "We couldn't transcribe that recording. Please try again."
+          )
+          setMode("review")
+          updateRecorderState("error")
+        })
+      })
+
+      recorder.start()
+      setMode("listening")
+      updateRecorderState("recording")
+    } catch (error) {
+      cleanupRecorder()
+      setConnectionError(buildMicrophoneError(error))
+      setMode("review")
+      updateRecorderState("error")
+    }
+  }
+
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current
+
+    if (!recorder || recorder.state !== "recording") {
+      return
+    }
+
+    updateRecorderState("stopping")
+    recorder.stop()
+  }
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+      cleanupRecorder()
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -119,10 +355,11 @@ export function InteractiveVoiceModal({
     }
 
     setMode("connecting")
+    setRecorderState("idle")
     setPromptIndex(0)
     setRecordingSeconds(0)
     setShowCloseConfirm(false)
-    setTranscript(transcriptPlaceholders[0])
+    setTranscript("")
     setResult(null)
     setConnectionError(null)
 
@@ -154,7 +391,7 @@ export function InteractiveVoiceModal({
 
         socket.addEventListener("open", () => {
           if (!cancelled) {
-            setMode("listening")
+            void startRecording()
           }
         })
 
@@ -170,6 +407,13 @@ export function InteractiveVoiceModal({
 
           if (payload.type === "partial_transcript") {
             setTranscript(payload.text)
+            return
+          }
+
+          if (payload.type === "final_transcript") {
+            setTranscript(payload.text)
+            setConnectionError(null)
+            setMode("review")
             return
           }
 
@@ -218,7 +462,7 @@ export function InteractiveVoiceModal({
   }, [open, transcript, mode])
 
   useEffect(() => {
-    if (!open || mode !== "listening") {
+    if (!open || mode !== "listening" || recorderState !== "recording") {
       return
     }
 
@@ -227,7 +471,7 @@ export function InteractiveVoiceModal({
     }, 1000)
 
     return () => window.clearInterval(interval)
-  }, [mode, open])
+  }, [mode, open, recorderState])
 
   useEffect(() => {
     if (!open) {
@@ -235,6 +479,8 @@ export function InteractiveVoiceModal({
     }
 
     return () => {
+      cleanupRecorder()
+
       const socket = socketRef.current
       if (
         socket &&
@@ -265,8 +511,7 @@ export function InteractiveVoiceModal({
   const hasProgress =
     recordingSeconds > 0 ||
     result !== null ||
-    transcript.trim() !==
-      (transcriptPlaceholders[promptIndex] ?? transcriptPlaceholders[0])
+    transcript.trim().length > 0
 
   function requestClose() {
     if (hasProgress) {
@@ -283,14 +528,11 @@ export function InteractiveVoiceModal({
   }
 
   function handleRecordAgain() {
-    setRecordingSeconds(0)
-    setResult(null)
-    setConnectionError(null)
-    setMode("listening")
+    void startRecording()
   }
 
   function handleStopListening() {
-    setMode("review")
+    stopRecording()
   }
 
   function handleSendToAi() {
@@ -317,15 +559,8 @@ export function InteractiveVoiceModal({
   }
 
   function handleReply() {
-    const nextPromptIndex = (promptIndex + 1) % aiPrompts.length
-    setPromptIndex(nextPromptIndex)
-    setTranscript(
-      transcriptPlaceholders[nextPromptIndex] ?? transcriptPlaceholders[0]
-    )
-    setRecordingSeconds(0)
-    setResult(null)
-    setConnectionError(null)
-    setMode("listening")
+    setPromptIndex((current) => (current + 1) % aiPrompts.length)
+    void startRecording()
   }
 
   return (
@@ -473,11 +708,12 @@ export function InteractiveVoiceModal({
                       </div>
                       <ListeningWaveform />
                       <p className="mt-5 text-sm leading-7 text-[#2F3E36]/70">
-                        {transcript}
+                        {transcript || "Speak naturally. Your words will appear here once the recording stops."}
                       </p>
                       <div className="mt-5 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
                         <Button
                           onClick={handleStopListening}
+                          disabled={recorderState !== "recording"}
                           className="h-12 rounded-full border-0 bg-[#2F3E36] px-6 text-sm text-white hover:bg-[#24302a]"
                         >
                           <HugeiconsIcon
@@ -527,6 +763,7 @@ export function InteractiveVoiceModal({
                       <textarea
                         value={transcript}
                         onChange={(event) => setTranscript(event.target.value)}
+                        placeholder="Your reflection will appear here after recording, and you can edit it before sending."
                         className="mt-5 min-h-32 w-full rounded-[1.5rem] bg-[#FDFBF7]/65 p-4 text-left text-sm leading-7 text-[#2F3E36]/74 outline-none"
                       />
 
@@ -534,6 +771,7 @@ export function InteractiveVoiceModal({
                         <Button
                           variant="outline"
                           onClick={handleRecordAgain}
+                          disabled={recorderState === "requesting_permission" || recorderState === "transcribing"}
                           className="h-12 rounded-full border-white/50 bg-white/35 px-6 text-sm text-[#2F3E36] hover:bg-white/55"
                         >
                           <HugeiconsIcon
@@ -546,6 +784,7 @@ export function InteractiveVoiceModal({
                         </Button>
                         <Button
                           onClick={handleSendToAi}
+                          disabled={!transcript.trim() || recorderState === "transcribing"}
                           className="h-12 rounded-full border-0 bg-[var(--brand-primary)] px-6 text-sm text-[var(--brand-on-primary)] hover:bg-[var(--brand-primary-strong)]"
                         >
                           <HugeiconsIcon

@@ -145,6 +145,25 @@ def build_calendar(
     tzinfo: ZoneInfo | timezone,
 ) -> CalendarResponse:
     start_date = end_date - timedelta(days=days - 1)
+    items = build_calendar_items(
+        db=db,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        tzinfo=tzinfo,
+    )
+
+    return CalendarResponse(user_id=user_id, days=days, items=items)
+
+
+def build_calendar_items(
+    *,
+    db: Session,
+    user_id: str,
+    start_date: date,
+    end_date: date,
+    tzinfo: ZoneInfo | timezone,
+) -> list[CalendarDayItemResponse]:
     entries = list_entries_for_local_date_range(db, user_id, start_date, end_date, tzinfo)
 
     grouped_entries: dict[date, list[JournalEntry]] = defaultdict(list)
@@ -179,4 +198,4 @@ def build_calendar(
         )
         current_date += timedelta(days=1)
 
-    return CalendarResponse(user_id=user_id, days=days, items=items)
+    return items

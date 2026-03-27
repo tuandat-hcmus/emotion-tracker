@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from app.schemas.user import JournalHistoryItemResponse
 
 
 class PreferenceResponse(BaseModel):
@@ -318,3 +319,18 @@ class MonthlyWrapupDetailResponse(BaseModel):
     distributions: MonthlyWrapupDistributionsResponse
     pattern_lists: MonthlyWrapupPatternListsResponse
     visual_hints: MonthlyWrapupVisualHintsResponse
+
+
+class JournalMonthPeriodResponse(BaseModel):
+    year: int
+    month: int
+    label: str
+    date_from: str
+    date_to: str
+
+
+class JournalMonthResponse(BaseModel):
+    period: JournalMonthPeriodResponse
+    calendar_items: list[CalendarDayItemResponse] = Field(default_factory=list)
+    entries: list[JournalHistoryItemResponse] = Field(default_factory=list)
+    monthly_wrapup: WrapupSnapshotResponse | None = None

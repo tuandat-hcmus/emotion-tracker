@@ -519,6 +519,7 @@ function buildHistoryItem(item: CheckinDetail): JournalHistoryItem {
     status: item.status,
     session_type: item.session_type,
     source_type: item.source_type,
+    local_date: item.created_at.slice(0, 10),
     transcript_excerpt: item.transcript_text,
     ai_response_excerpt: item.ai_response,
     primary_label: item.primary_label,
@@ -981,78 +982,6 @@ function createSeedCheckins(userId: string) {
   )
 }
 
-function createSeedConversations(userId: string) {
-  const sessionOneId = createId("session")
-  const sessionTwoId = createId("session")
-  const firstStartedAt = toIso(addHours(addDays(new Date(), -4), -3))
-  const secondStartedAt = toIso(addHours(addDays(new Date(), -1), -8))
-
-  return {
-    conversationSessions: [
-      {
-        id: sessionTwoId,
-        user_id: userId,
-        status: "completed",
-        started_at: secondStartedAt,
-        ended_at: toIso(addHours(new Date(secondStartedAt), 1)),
-      },
-      {
-        id: sessionOneId,
-        user_id: userId,
-        status: "completed",
-        started_at: firstStartedAt,
-        ended_at: toIso(addHours(new Date(firstStartedAt), 1)),
-      },
-    ] satisfies ConversationSessionResponse[],
-    conversationTurns: {
-      [sessionTwoId]: [
-        {
-          id: createId("turn"),
-          session_id: sessionTwoId,
-          role: "user",
-          text: "I kept replaying a conversation after work and needed to talk it out.",
-          audio_path: null,
-          emotion_snapshot: null,
-          state_snapshot: null,
-          created_at: secondStartedAt,
-        },
-        {
-          id: createId("turn"),
-          session_id: sessionTwoId,
-          role: "assistant",
-          text: "That makes sense. It sounds like the moment stayed with you longer than you wanted, and naming it may help it loosen a little.",
-          audio_path: null,
-          emotion_snapshot: null,
-          state_snapshot: null,
-          created_at: toIso(addHours(new Date(secondStartedAt), 0.1)),
-        },
-      ],
-      [sessionOneId]: [
-        {
-          id: createId("turn"),
-          session_id: sessionOneId,
-          role: "user",
-          text: "I have been feeling overwhelmed by deadlines this week.",
-          audio_path: null,
-          emotion_snapshot: null,
-          state_snapshot: null,
-          created_at: firstStartedAt,
-        },
-        {
-          id: createId("turn"),
-          session_id: sessionOneId,
-          role: "assistant",
-          text: "You do not have to sort the whole week tonight. What would make the next step feel a little smaller?",
-          audio_path: null,
-          emotion_snapshot: null,
-          state_snapshot: null,
-          created_at: toIso(addHours(new Date(firstStartedAt), 0.08)),
-        },
-      ],
-    } satisfies Record<string, ConversationTurnResponse[]>,
-  }
-}
-
 function createUserRecord(email: string, password: string, displayName?: string | null) {
   const normalizedEmail = normalizeEmail(email)
   const timestamp = new Date().toISOString()
@@ -1065,14 +994,13 @@ function createUserRecord(email: string, password: string, displayName?: string 
     updated_at: timestamp,
   }
   const seedCheckins = createSeedCheckins(user.id)
-  const seedConversations = createSeedConversations(user.id)
 
   return {
     user,
     password,
     checkins: seedCheckins,
-    conversationSessions: seedConversations.conversationSessions,
-    conversationTurns: seedConversations.conversationTurns,
+    conversationSessions: [],
+    conversationTurns: {},
   } satisfies MockUserRecord
 }
 

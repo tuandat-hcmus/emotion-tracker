@@ -51,6 +51,7 @@ class JournalHistoryItemResponse(BaseModel):
     status: str
     session_type: str
     source_type: str
+    local_date: str
     transcript_excerpt: str | None
     ai_response_excerpt: str | None
     primary_label: str | None

@@ -160,6 +160,23 @@ def test_mock_stt_provider_selected_by_default(monkeypatch, settings_factory) ->
     assert isinstance(provider, MockSpeechToTextProvider)
 
 
+def test_gemini_stt_provider_selected_when_configured(monkeypatch, settings_factory) -> None:
+    import app.services.stt_service as stt_service_module
+
+    settings = settings_factory(stt_provider="gemini", use_mock_stt=False)
+    settings.gemini_api_key = "test-key"
+    monkeypatch.setattr(stt_service_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        stt_service_module,
+        "GeminiSpeechToTextProvider",
+        lambda: SimpleNamespace(provider="gemini"),
+    )
+
+    provider = get_stt_provider()
+
+    assert provider.provider == "gemini"
+
+
 def test_mock_response_provider_selected_by_default(monkeypatch, settings_factory) -> None:
     import app.services.response_service as response_service_module
 

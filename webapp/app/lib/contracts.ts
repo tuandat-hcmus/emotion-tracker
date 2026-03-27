@@ -170,6 +170,7 @@ export type JournalHistoryItem = {
   status: string
   session_type: string
   source_type: string
+  local_date: string
   transcript_excerpt: string | null
   ai_response_excerpt: string | null
   primary_label: string | null
@@ -185,6 +186,19 @@ export type JournalHistoryResponse = {
   limit: number
   offset: number
   items: JournalHistoryItem[]
+}
+
+export type JournalMonthResponse = {
+  period: {
+    year: number
+    month: number
+    label: string
+    date_from: string
+    date_to: string
+  }
+  calendar_items: CalendarDayItem[]
+  entries: JournalHistoryItem[]
+  monthly_wrapup: WrapupSnapshotResponse | null
 }
 
 export type UserSummaryResponse = {

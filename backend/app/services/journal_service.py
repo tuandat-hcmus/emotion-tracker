@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.journal_entry import JournalEntry
+from app.schemas.user import JournalHistoryItemResponse
 
 
 def list_user_entries(
@@ -135,3 +136,21 @@ def get_entry_context_tags(entry: JournalEntry) -> list[str]:
     if isinstance(context_tags, list):
         return [str(item) for item in context_tags]
     return []
+
+
+def serialize_history_item(entry: JournalEntry, *, local_date: date) -> JournalHistoryItemResponse:
+    return JournalHistoryItemResponse(
+        id=entry.id,
+        entry_id=entry.id,
+        status=entry.processing_status,
+        session_type=entry.session_type,
+        source_type=get_entry_source_type(entry),
+        local_date=local_date.isoformat(),
+        transcript_excerpt=build_excerpt(entry.transcript_text),
+        ai_response_excerpt=build_excerpt(entry.ai_response),
+        primary_label=entry.emotion_label,
+        secondary_labels=get_entry_secondary_labels(entry),
+        stress_score=entry.stress_score,
+        created_at=entry.created_at,
+        updated_at=entry.updated_at,
+    )

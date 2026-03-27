@@ -142,7 +142,7 @@ def test_voice_checkin_processes_via_stt_then_text_pipeline(client, monkeypatch)
     assert payload["transcript_text"] == "I feel overwhelmed because deadlines are piling up."
     assert payload["transcript_confidence"] == 0.91
     assert payload["transcript_source"] == "stt"
-    assert payload["transcript_provider"] in {"mock", "openai"}
+    assert payload["transcript_provider"] in {"mock", "openai", "gemini"}
     assert payload["ai_analysis_complete"] is True
     assert payload["latest_attempt_status"] == "succeeded"
     assert payload["response_metadata"]["normalized_text"] == "I feel overwhelmed because deadlines are piling up."

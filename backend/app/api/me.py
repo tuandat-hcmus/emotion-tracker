@@ -11,6 +11,7 @@ from app.schemas.me import (
     CalendarResponse,
     CheckinStatusResponse,
     HomeResponse,
+    JournalMonthResponse,
     MonthlyWrapupDetailResponse,
     PreferenceResponse,
     UpdateMeRequest,
@@ -21,6 +22,7 @@ from app.schemas.me import (
 )
 from app.services.calendar_service import build_calendar, build_checkin_status, resolve_user_today, resolve_user_timezone
 from app.services.home_service import build_home_response
+from app.services.journal_month_service import build_journal_month
 from app.services.preferences_service import get_or_create_preferences, upsert_preferences
 from app.services.respond_preview_service import build_respond_preview_response
 from app.services.user_service import update_display_name
@@ -119,6 +121,21 @@ def get_me_calendar(
         days=days,
         end_date=resolve_user_today(preferences),
         tzinfo=resolve_user_timezone(preferences),
+    )
+
+
+@router.get("/journal/month", response_model=JournalMonthResponse)
+def get_me_journal_month(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> JournalMonthResponse:
+    return build_journal_month(
+        db=db,
+        user_id=current_user.id,
+        year=year,
+        month=month,
     )
 
 

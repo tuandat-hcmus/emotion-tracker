@@ -14,7 +14,9 @@ from app.schemas.user import (
     TreeTimelineResponse,
     UserSummaryResponse,
 )
-from app.services.journal_service import build_excerpt, get_entry_secondary_labels, get_entry_source_type, list_user_entries
+from app.services.calendar_service import resolve_user_timezone
+from app.services.journal_service import list_user_entries, serialize_history_item
+from app.services.preferences_service import get_or_create_preferences
 from app.services.summary_service import build_user_summary
 from app.services.tree_service import build_tree_timeline
 
@@ -58,6 +60,8 @@ def get_user_entries(
     current_user: User | None = Depends(get_current_user_optional),
 ) -> JournalHistoryResponse:
     enforce_user_owner_access(user_id, current_user)
+    preferences = get_or_create_preferences(db, user_id)
+    tzinfo = resolve_user_timezone(preferences)
     total, items = list_user_entries(
         db=db,
         user_id=user_id,
@@ -75,20 +79,7 @@ def get_user_entries(
         limit=limit,
         offset=offset,
         items=[
-            JournalHistoryItemResponse(
-                id=item.id,
-                entry_id=item.id,
-                status=item.processing_status,
-                session_type=item.session_type,
-                source_type=get_entry_source_type(item),
-                transcript_excerpt=build_excerpt(item.transcript_text),
-                ai_response_excerpt=build_excerpt(item.ai_response),
-                primary_label=item.emotion_label,
-                secondary_labels=get_entry_secondary_labels(item),
-                stress_score=item.stress_score,
-                created_at=item.created_at,
-                updated_at=item.updated_at,
-            )
+            serialize_history_item(item, local_date=item.created_at.astimezone(tzinfo).date())
             for item in items
         ],
     )

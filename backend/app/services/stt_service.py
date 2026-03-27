@@ -56,12 +56,61 @@ class OpenAISpeechToTextProvider:
         return text, 0.95
 
 
+class GeminiSpeechToTextProvider:
+    def __init__(self) -> None:
+        settings = get_settings()
+        if not settings.gemini_api_key:
+            raise ProviderConfigurationError("STT provider 'gemini' requires GEMINI_API_KEY")
+
+        try:
+            from google import genai
+        except ImportError as exc:
+            raise ProviderConfigurationError(
+                "STT provider 'gemini' requires the 'google-genai' package to be installed"
+            ) from exc
+
+        self._client = genai.Client(api_key=settings.gemini_api_key)
+        self._model = settings.gemini_text_model
+        self._prompt = (
+            "Generate a verbatim transcript of the speech in this audio. "
+            "Return only the transcript text without timestamps, labels, or commentary."
+        )
+
+    def transcribe(self, audio_path: str) -> tuple[str, float]:
+        uploaded_file = None
+        try:
+            uploaded_file = self._client.files.upload(file=audio_path)
+            result = self._client.models.generate_content(
+                model=self._model,
+                contents=[self._prompt, uploaded_file],
+            )
+        except Exception as exc:
+            raise ProviderExecutionError(f"Gemini STT transcription failed: {exc}") from exc
+        finally:
+            if uploaded_file is not None:
+                uploaded_file_name = getattr(uploaded_file, "name", None)
+                if uploaded_file_name:
+                    try:
+                        self._client.files.delete(name=uploaded_file_name)
+                    except Exception:
+                        logger.warning("stt.gemini_cleanup_failed audio_file=%s", Path(audio_path).name)
+
+        text = getattr(result, "text", None)
+        if not text or not text.strip():
+            raise ProviderExecutionError("Gemini STT transcription returned empty text")
+        return text.strip(), 0.9
+
+
 def get_stt_provider() -> SpeechToTextProvider:
     settings = get_settings()
 
     if settings.stt_provider == "openai":
         return OpenAISpeechToTextProvider()
-    if settings.use_mock_stt or settings.stt_provider == "mock":
+    if settings.stt_provider == "gemini":
+        return GeminiSpeechToTextProvider()
+    if settings.stt_provider == "mock":
+        return MockSpeechToTextProvider()
+    if settings.use_mock_stt:
         return MockSpeechToTextProvider()
     raise ProviderConfigurationError(f"Unsupported STT provider: {settings.stt_provider}")
 
@@ -73,7 +122,11 @@ def get_stt_provider_name(override_transcript: str | None = None) -> str:
     settings = get_settings()
     if settings.stt_provider == "openai":
         return "openai"
-    if settings.use_mock_stt or settings.stt_provider == "mock":
+    if settings.stt_provider == "gemini":
+        return "gemini"
+    if settings.stt_provider == "mock":
+        return "mock"
+    if settings.use_mock_stt:
         return "mock"
     return settings.stt_provider
 

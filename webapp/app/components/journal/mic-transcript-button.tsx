@@ -85,6 +85,26 @@ function formatElapsed(seconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
 }
 
+function resolveRecorderEnvironmentError() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return "Voice recording is only available in the browser."
+  }
+
+  if (!window.isSecureContext) {
+    return "Microphone recording requires a secure page. Open the app on localhost or HTTPS."
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return "This browser does not support microphone capture."
+  }
+
+  if (typeof MediaRecorder === "undefined") {
+    return "This browser does not support audio recording."
+  }
+
+  return null
+}
+
 export function MicTranscriptButton({
   disabled = false,
   token,
@@ -182,13 +202,9 @@ export function MicTranscriptButton({
       return
     }
 
-    if (
-      typeof window === "undefined" ||
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === "undefined"
-    ) {
-      updateUiState("error", "Voice recording is not supported in this browser.")
+    const environmentError = resolveRecorderEnvironmentError()
+    if (environmentError) {
+      updateUiState("error", environmentError)
       return
     }
 
@@ -202,6 +218,24 @@ export function MicTranscriptButton({
     )
 
     try {
+      if (navigator.permissions?.query) {
+        try {
+          const permissionStatus = await navigator.permissions.query({
+            name: "microphone" as PermissionName,
+          })
+
+          if (permissionStatus.state === "denied") {
+            updateUiState(
+              "error",
+              "Microphone access is blocked in your browser settings. Allow it, then try again."
+            )
+            return
+          }
+        } catch {
+          // Ignore unsupported microphone permission queries and fall through to getUserMedia.
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -293,7 +327,7 @@ export function MicTranscriptButton({
           })
       })
 
-      recorder.start()
+      recorder.start(250)
       updateUiState("recording", "Listening now. Tap again when you're ready to stop.")
     } catch (error) {
       uploadAbortControllerRef.current = null
@@ -309,6 +343,11 @@ export function MicTranscriptButton({
     }
 
     updateUiState("stopping", "Finishing your recording...")
+    try {
+      recorder.requestData()
+    } catch {
+      // Some browsers may throw here if there is not yet buffered data.
+    }
     recorder.stop()
   }
 

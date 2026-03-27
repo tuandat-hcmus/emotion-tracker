@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     enable_dev_seed_endpoints: bool = False
     db_echo: bool = False
     auto_create_tables_for_dev: bool = False
-    backend_cors_origins: str = ""
+    backend_cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
 
     model_config = SettingsConfigDict(
         env_file=("backend/.env", ".env"),

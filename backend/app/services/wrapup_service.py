@@ -861,6 +861,30 @@ def get_latest_wrapup_snapshot(
     return _serialize_snapshot(snapshot)
 
 
+def get_monthly_wrapup_snapshot(
+    db: Session,
+    user_id: str,
+    *,
+    year: int,
+    month: int,
+) -> WrapupSnapshotResponse | None:
+    period_start, period_end = _period_bounds("month", date(year, month, 1))
+    snapshot = (
+        db.query(WrapupSnapshot)
+        .filter(
+            WrapupSnapshot.user_id == user_id,
+            WrapupSnapshot.period_type == "month",
+            WrapupSnapshot.period_start == period_start,
+            WrapupSnapshot.period_end == period_end,
+        )
+        .order_by(WrapupSnapshot.generated_at.desc(), WrapupSnapshot.created_at.desc())
+        .first()
+    )
+    if snapshot is None:
+        return None
+    return _serialize_snapshot(snapshot)
+
+
 def build_monthly_wrapup_detail(
     db: Session,
     user_id: str,

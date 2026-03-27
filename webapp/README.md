@@ -14,7 +14,7 @@ Stack:
 ### Windows PowerShell
 
 ```powershell
-cd C:\Users\admin\Desktop\Project\Emotion\frontend\webapp
+cd C:\Users\admin\Desktop\Project\Emotion\webapp
 npm install
 Copy-Item .env.example .env
 npm run dev
@@ -23,7 +23,7 @@ npm run dev
 ### Bash
 
 ```bash
-cd frontend/webapp
+cd webapp
 npm install
 cp .env.example .env
 npm run dev

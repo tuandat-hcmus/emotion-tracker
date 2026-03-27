@@ -5,12 +5,16 @@ import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Cancel01Icon,
+  PencilEdit02Icon,
   Leaf02Icon,
+  NoteIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons"
 
 import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
 import { useAuth } from "~/context/auth-context"
+import { useSoulForest } from "~/context/soul-forest-context"
+import { MicTranscriptButton } from "~/components/journal/mic-transcript-button"
 import {
   Dialog,
   DialogClose,
@@ -518,6 +522,7 @@ function DayDetails({
 
 export default function JournalPage() {
   const { token, user } = useAuth()
+  const { refreshHome, syncCheckinResult } = useSoulForest()
   const [calendar, setCalendar] = useState<CalendarDayItem[]>([])
   const [history, setHistory] = useState<JournalHistoryItem[]>([])
   const [latestMonthlyWrapup, setLatestMonthlyWrapup] = useState<WrapupSnapshotResponse | null>(
@@ -533,6 +538,23 @@ export default function JournalPage() {
   const [monthOffset, setMonthOffset] = useState(0)
   const [recapIndex, setRecapIndex] = useState(0)
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  const [draftText, setDraftText] = useState("")
+  const [composerError, setComposerError] = useState<string | null>(null)
+  const [composerNotice, setComposerNotice] = useState<string | null>(null)
+  const [isSubmittingEntry, setIsSubmittingEntry] = useState(false)
+  const activeMonth = useMemo(
+    () => addMonths(startOfMonth(new Date()), monthOffset),
+    [monthOffset]
+  )
+  const activeMonthKey = useMemo(() => getMonthKey(activeMonth), [activeMonth])
+
+  async function loadJournalMonth(accessToken: string, monthDate: Date) {
+    return api.getJournalMonth(
+      accessToken,
+      monthDate.getFullYear(),
+      monthDate.getMonth() + 1
+    )
+  }
 
   useEffect(() => {
     if (!token || !user) {
@@ -544,7 +566,6 @@ export default function JournalPage() {
     }
 
     const accessToken = token
-    const currentUser = user
     let cancelled = false
 
     async function loadJournal() {
@@ -552,30 +573,22 @@ export default function JournalPage() {
       setPageError(null)
 
       try {
-        const [calendarResult, historyResult, monthlyWrapupResult] = await Promise.allSettled([
-          api.getCalendar(accessToken, 120),
-          api.getHistory(accessToken, currentUser.id, 120, 0),
-          api.getLatestMonthlyWrapup(accessToken),
-        ])
-
-        if (calendarResult.status !== "fulfilled") {
-          throw calendarResult.reason
+        if (cancelled) {
+          return
         }
 
-        if (historyResult.status !== "fulfilled") {
-          throw historyResult.reason
-        }
+        const journalMonth = await loadJournalMonth(accessToken, activeMonth)
 
         if (cancelled) {
           return
         }
 
-        setCalendar(calendarResult.value.items)
-        setHistory(historyResult.value.items)
-        setLatestMonthlyWrapup(
-          monthlyWrapupResult.status === "fulfilled" ? monthlyWrapupResult.value : null
-        )
+        setCalendar(journalMonth.calendar_items)
+        setHistory(journalMonth.entries)
+        setLatestMonthlyWrapup(journalMonth.monthly_wrapup)
+        setSelectedDetails({})
         setPageStatus("ready")
+        setPageError(null)
       } catch (error) {
         if (cancelled) {
           return
@@ -591,13 +604,7 @@ export default function JournalPage() {
     return () => {
       cancelled = true
     }
-  }, [token, user])
-
-  const activeMonth = useMemo(
-    () => addMonths(startOfMonth(new Date()), monthOffset),
-    [monthOffset]
-  )
-  const activeMonthKey = useMemo(() => getMonthKey(activeMonth), [activeMonth])
+  }, [activeMonth, token, user])
   const calendarMap = useMemo(
     () => new Map(calendar.map((item) => [item.date, item])),
     [calendar]
@@ -621,7 +628,7 @@ export default function JournalPage() {
   const selectedEntries = useMemo(
     () =>
       history
-        .filter((item) => item.created_at.slice(0, 10) === selectedDate)
+        .filter((item) => item.local_date === selectedDate)
         .sort((left, right) => left.created_at.localeCompare(right.created_at)),
     [history, selectedDate]
   )
@@ -630,7 +637,7 @@ export default function JournalPage() {
     [activeMonthKey, calendar]
   )
   const monthEntries = useMemo(
-    () => history.filter((item) => getMonthKey(item.created_at) === activeMonthKey),
+    () => history.filter((item) => getMonthKey(item.local_date) === activeMonthKey),
     [activeMonthKey, history]
   )
   const activeMonthWrapup = useMemo(() => {
@@ -705,6 +712,51 @@ export default function JournalPage() {
   )
   const recapBackdropColor = getEmotionColor(recapTreeEmotion)
 
+  async function handleSaveEntry() {
+    if (!token) {
+      setComposerError("Please sign in before saving a check-in.")
+      return
+    }
+
+    if (!draftText.trim()) {
+      setComposerError("Write something or record audio before saving.")
+      return
+    }
+
+    setComposerError(null)
+    setComposerNotice(null)
+    setIsSubmittingEntry(true)
+
+    try {
+      setPageStatus("loading")
+      const result = await api.createTextCheckin(token, {
+        text: draftText.trim(),
+        session_type: "free",
+      })
+
+      syncCheckinResult(result)
+      setDraftText("")
+      setComposerNotice("Check-in saved.")
+      setMonthOffset(0)
+      setSelectedDate(new Date().toISOString().slice(0, 10))
+      await refreshHome()
+      const journalMonth = await loadJournalMonth(token, startOfMonth(new Date()))
+      setCalendar(journalMonth.calendar_items)
+      setHistory(journalMonth.entries)
+      setLatestMonthlyWrapup(journalMonth.monthly_wrapup)
+      setSelectedDetails({})
+      setPageStatus("ready")
+      setPageError(null)
+    } catch (error) {
+      setComposerError(
+        error instanceof Error ? error.message : "Unable to save this check-in."
+      )
+      setPageStatus("error")
+    } finally {
+      setIsSubmittingEntry(false)
+    }
+  }
+
   return (
     <section className="min-h-[calc(100vh-8rem)] p-4 md:p-6">
       <div className="mx-auto max-w-6xl space-y-4">
@@ -743,6 +795,87 @@ export default function JournalPage() {
               {pageError}
             </p>
           ) : null}
+        </div>
+
+        <div className="rounded-[2rem] bg-white/88 p-5 shadow-[0_18px_60px_rgba(17,70,62,0.08)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[var(--brand-primary-soft)] px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-[var(--brand-primary-muted)]">
+                <HugeiconsIcon icon={NoteIcon} size={14} strokeWidth={1.8} />
+                New check-in
+              </div>
+              <h2 className="mt-3 text-xl font-semibold text-[#163D33]">
+                Record audio or write, then save as text
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#648078]">
+                Voice is transcribed first, then stored through the same text check-in flow as typed notes.
+              </p>
+            </div>
+
+            <MicTranscriptButton
+              token={token}
+              disabled={isSubmittingEntry}
+              onTranscriptReady={(transcript) => {
+                setDraftText(transcript)
+                setComposerError(null)
+                setComposerNotice("Transcript ready. Review it, then save.")
+              }}
+            />
+          </div>
+
+          <div className="mt-5">
+            <label className="block text-sm font-medium text-[#163D33]">
+              Reflection
+            </label>
+            <div className="mt-2 rounded-[1.6rem] bg-[#F8FFFC] p-3">
+              <textarea
+                value={draftText}
+                onChange={(event) => {
+                  setDraftText(event.target.value)
+                  if (composerError) {
+                    setComposerError(null)
+                  }
+                  if (composerNotice) {
+                    setComposerNotice(null)
+                  }
+                }}
+                placeholder="Type your check-in here, or use the microphone to convert your voice into text."
+                className="min-h-36 w-full rounded-[1.2rem] bg-white/80 p-4 text-sm leading-7 text-[#234640] outline-none placeholder:text-[#234640]/35"
+              />
+            </div>
+          </div>
+
+          {composerError ? (
+            <p className="mt-4 rounded-[1rem] bg-[#FFF1ED] px-4 py-3 text-sm text-[#A34F38]">
+              {composerError}
+            </p>
+          ) : null}
+
+          {composerNotice ? (
+            <p className="mt-4 rounded-[1rem] bg-[#F2FFF8] px-4 py-3 text-sm text-[#2D6B54]">
+              {composerNotice}
+            </p>
+          ) : null}
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-[#648078]">
+              Saved entries appear in the journal timeline below.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSaveEntry()}
+              disabled={isSubmittingEntry || !draftText.trim() || !token}
+              className="inline-flex items-center rounded-full bg-[var(--brand-primary)] px-5 py-3 text-sm font-medium text-[var(--brand-on-primary)] transition-colors hover:bg-[var(--brand-primary-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <HugeiconsIcon
+                icon={PencilEdit02Icon}
+                size={16}
+                strokeWidth={1.8}
+                className="mr-2"
+              />
+              {isSubmittingEntry ? "Saving..." : "Save check-in"}
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
