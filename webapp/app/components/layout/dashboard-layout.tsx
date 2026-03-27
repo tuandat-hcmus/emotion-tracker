@@ -10,6 +10,7 @@ import { Suspense, lazy, useState } from "react"
 import { Navigate, NavLink, Outlet, useLocation } from "react-router"
 
 import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
+import { CheckinReminderBanner } from "~/components/layout/checkin-reminder-banner"
 import { useAuth } from "~/context/auth-context"
 import { useSoulForest } from "~/context/soul-forest-context"
 import { formatEmotionLabel, getEmotionColor } from "~/lib/emotions"
@@ -239,6 +240,8 @@ export function DashboardLayout() {
           />
         ) : null}
       </Suspense>
+
+      <CheckinReminderBanner />
     </div>
   )
 }

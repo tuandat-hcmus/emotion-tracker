@@ -10,6 +10,7 @@ import {
   NoteIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons"
+import { useSearchParams } from "react-router"
 
 import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
 import { useAuth } from "~/context/auth-context"
@@ -39,6 +40,35 @@ import {
 } from "~/lib/emotions"
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
+const ENTRY_SESSION_TYPES = ["free", "morning", "evening"] as const
+
+type EntrySessionType = (typeof ENTRY_SESSION_TYPES)[number]
+
+const SESSION_TYPE_OPTIONS: Array<{
+  value: EntrySessionType
+  label: string
+  description: string
+}> = [
+  {
+    value: "free",
+    label: "Flexible",
+    description: "General check-in at any time.",
+  },
+  {
+    value: "morning",
+    label: "Morning",
+    description: "Counts toward your morning reminder.",
+  },
+  {
+    value: "evening",
+    label: "Evening",
+    description: "Counts toward your evening reminder.",
+  },
+]
+
+function isEntrySessionType(value: string | null): value is EntrySessionType {
+  return Boolean(value && ENTRY_SESSION_TYPES.includes(value as EntrySessionType))
+}
 
 function startOfMonth(value: Date) {
   return new Date(value.getFullYear(), value.getMonth(), 1)
@@ -523,6 +553,7 @@ function DayDetails({
 export default function JournalPage() {
   const { token, user } = useAuth()
   const { refreshHome, syncCheckinResult } = useSoulForest()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [calendar, setCalendar] = useState<CalendarDayItem[]>([])
   const [history, setHistory] = useState<JournalHistoryItem[]>([])
   const [latestMonthlyWrapup, setLatestMonthlyWrapup] = useState<WrapupSnapshotResponse | null>(
@@ -542,11 +573,26 @@ export default function JournalPage() {
   const [composerError, setComposerError] = useState<string | null>(null)
   const [composerNotice, setComposerNotice] = useState<string | null>(null)
   const [isSubmittingEntry, setIsSubmittingEntry] = useState(false)
+  const [entrySessionType, setEntrySessionType] = useState<EntrySessionType>(() => {
+    const requestedSessionType = searchParams.get("session")
+    return isEntrySessionType(requestedSessionType) ? requestedSessionType : "free"
+  })
   const activeMonth = useMemo(
     () => addMonths(startOfMonth(new Date()), monthOffset),
     [monthOffset]
   )
   const activeMonthKey = useMemo(() => getMonthKey(activeMonth), [activeMonth])
+  const sessionHelperText = useMemo(() => {
+    if (entrySessionType === "morning") {
+      return "Saving now will count as today's morning check-in."
+    }
+
+    if (entrySessionType === "evening") {
+      return "Saving now will count as today's evening check-in."
+    }
+
+    return "Use flexible for a general note, or switch to morning/evening when you want this entry to satisfy a reminder."
+  }, [entrySessionType])
 
   async function loadJournalMonth(accessToken: string, monthDate: Date) {
     return api.getJournalMonth(
@@ -605,6 +651,17 @@ export default function JournalPage() {
       cancelled = true
     }
   }, [activeMonth, token, user])
+
+  useEffect(() => {
+    const requestedSessionType = searchParams.get("session")
+    const nextSessionType = isEntrySessionType(requestedSessionType)
+      ? requestedSessionType
+      : "free"
+
+    setEntrySessionType((current) =>
+      current === nextSessionType ? current : nextSessionType
+    )
+  }, [searchParams])
   const calendarMap = useMemo(
     () => new Map(calendar.map((item) => [item.date, item])),
     [calendar]
@@ -712,6 +769,20 @@ export default function JournalPage() {
   )
   const recapBackdropColor = getEmotionColor(recapTreeEmotion)
 
+  function updateEntrySession(nextSessionType: EntrySessionType) {
+    setEntrySessionType(nextSessionType)
+
+    const nextSearchParams = new URLSearchParams(searchParams)
+
+    if (nextSessionType === "free") {
+      nextSearchParams.delete("session")
+    } else {
+      nextSearchParams.set("session", nextSessionType)
+    }
+
+    setSearchParams(nextSearchParams, { replace: true })
+  }
+
   async function handleSaveEntry() {
     if (!token) {
       setComposerError("Please sign in before saving a check-in.")
@@ -731,12 +802,18 @@ export default function JournalPage() {
       setPageStatus("loading")
       const result = await api.createTextCheckin(token, {
         text: draftText.trim(),
-        session_type: "free",
+        session_type: entrySessionType,
       })
 
       syncCheckinResult(result)
       setDraftText("")
       setComposerNotice("Check-in saved.")
+      setEntrySessionType("free")
+      if (searchParams.has("session")) {
+        const nextSearchParams = new URLSearchParams(searchParams)
+        nextSearchParams.delete("session")
+        setSearchParams(nextSearchParams, { replace: true })
+      }
       setMonthOffset(0)
       setSelectedDate(new Date().toISOString().slice(0, 10))
       await refreshHome()
@@ -821,6 +898,36 @@ export default function JournalPage() {
                 setComposerNotice("Transcript ready. Review it, then save.")
               }}
             />
+          </div>
+
+          <div className="mt-5">
+            <label className="block text-sm font-medium text-[#163D33]">
+              Check-in type
+            </label>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              {SESSION_TYPE_OPTIONS.map((option) => {
+                const isActive = option.value === entrySessionType
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateEntrySession(option.value)}
+                    className={`rounded-[1.35rem] border px-4 py-3 text-left transition-colors ${
+                      isActive
+                        ? "border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] shadow-[0_12px_28px_rgba(18,199,127,0.12)]"
+                        : "border-[#DDF5EA] bg-white/88 hover:bg-[#F8FFFC]"
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-[#163D33]">{option.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-[#648078]">
+                      {option.description}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-3 text-sm text-[#648078]">{sessionHelperText}</p>
           </div>
 
           <div className="mt-5">

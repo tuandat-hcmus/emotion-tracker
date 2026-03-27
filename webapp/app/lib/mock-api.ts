@@ -459,6 +459,7 @@ function buildResponsePlan(primaryEmotion: string | null): ResponsePlan {
 function buildCheckinDetail(args: {
   createdAt: string
   preferredEmotion?: CanonicalEmotion
+  sessionType?: string
   text: string
   userId: string
 }) {
@@ -468,7 +469,7 @@ function buildCheckinDetail(args: {
     entry_id: createId("entry"),
     status: "completed",
     user_id: args.userId,
-    session_type: "free",
+    session_type: args.sessionType ?? "free",
     source_type: "text",
     audio_path: null,
     transcript_text: args.text,
@@ -653,19 +654,15 @@ function buildHome(record: MockUserRecord): HomeResponse {
     },
     preferences_summary: {
       quote_opt_in: true,
-      reminder_enabled: false,
-      reminder_time: null,
+      reminder_enabled: true,
+      reminder_time: "08:30",
       preferred_tree_type: "forest-dawn",
       checkin_goal_per_day: 1,
     },
     today: {
       date: todayKey,
-      has_morning_checkin: todayCheckins.some(
-        (item) => new Date(item.created_at).getHours() < 12
-      ),
-      has_evening_checkin: todayCheckins.some(
-        (item) => new Date(item.created_at).getHours() >= 17
-      ),
+      has_morning_checkin: todayCheckins.some((item) => item.session_type == "morning"),
+      has_evening_checkin: todayCheckins.some((item) => item.session_type == "evening"),
       total_entries: todayCheckins.length,
       session_types_present: Array.from(new Set(todayCheckins.map((item) => item.session_type))),
       latest_entry_id: todayCheckins[0]?.entry_id ?? latest?.entry_id ?? null,
@@ -772,12 +769,8 @@ function buildCalendar(record: MockUserRecord, days: number): CalendarResponse {
     return {
       date: dateKey,
       entry_count: dayEntries.length,
-      has_morning_checkin: dayEntries.some(
-        (item) => new Date(item.created_at).getHours() < 12
-      ),
-      has_evening_checkin: dayEntries.some(
-        (item) => new Date(item.created_at).getHours() >= 17
-      ),
+      has_morning_checkin: dayEntries.some((item) => item.session_type == "morning"),
+      has_evening_checkin: dayEntries.some((item) => item.session_type == "evening"),
       primary_emotion_label: dominantEmotion,
       average_valence_score: average(dayEntries.map((item) => item.valence_score)),
       average_stress_score: average(dayEntries.map((item) => item.stress_score)),
@@ -950,11 +943,13 @@ function createSeedCheckins(userId: string) {
     {
       createdAt: toIso(addHours(addDays(now, -5), -2)),
       preferredEmotion: "fear" as CanonicalEmotion,
+      sessionType: "morning",
       text: "I spent most of the afternoon worrying about a deadline and I could feel the pressure building in my chest.",
     },
     {
       createdAt: toIso(addHours(addDays(now, -3), -4)),
       preferredEmotion: "sadness" as CanonicalEmotion,
+      sessionType: "evening",
       text: "I felt more tired than I expected today and it was hard to shake the sense that I was falling behind.",
     },
     {
@@ -965,6 +960,7 @@ function createSeedCheckins(userId: string) {
     {
       createdAt: toIso(addHours(addDays(now, -1), -6)),
       preferredEmotion: "neutral" as CanonicalEmotion,
+      sessionType: "morning",
       text: "Today was busy but manageable. I mostly noticed how much I needed a quiet hour to reset.",
     },
     {
@@ -976,6 +972,7 @@ function createSeedCheckins(userId: string) {
     buildCheckinDetail({
       createdAt: item.createdAt,
       preferredEmotion: item.preferredEmotion,
+      sessionType: item.sessionType,
       text: item.text,
       userId,
     })
@@ -1107,11 +1104,11 @@ export const mockApi = {
       const createdAt = new Date().toISOString()
       const detail = buildCheckinDetail({
         createdAt,
+        sessionType: payload.session_type ?? "free",
         text: payload.text.trim(),
         userId: record.user.id,
       })
 
-      detail.session_type = payload.session_type ?? "free"
       record.checkins = sortCheckinsDescending([detail, ...record.checkins])
       record.user.updated_at = createdAt
 
