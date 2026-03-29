@@ -80,6 +80,7 @@ class CheckinStatusResponse(BaseModel):
     latest_entry_id: str | None
     latest_emotion_label: str | None
     latest_risk_level: str | None
+    current_mood_label: str | None = None
 
 
 class HomeTodayResponse(CheckinStatusResponse):

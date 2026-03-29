@@ -13,6 +13,7 @@ from app.api.demo import router as demo_router
 from app.api.dev import router as dev_router
 from app.api.health import router as health_router
 from app.api.me import router as me_router
+from app.api.multimodal import router as multimodal_router
 from app.api.resources import router as resources_router
 from app.api.users import router as users_router
 from app.core.config import get_settings
@@ -21,6 +22,7 @@ from app.models import (
     ConversationSession,
     ConversationTurn,
     JournalEntry,
+    MultimodalSession,
     ProcessingAttempt,
     TreeState,
     TreeStateEvent,
@@ -35,6 +37,7 @@ def initialize_database() -> None:
     ConversationSession.__table__
     ConversationTurn.__table__
     JournalEntry.__table__
+    MultimodalSession.__table__
     ProcessingAttempt.__table__
     TreeState.__table__
     TreeStateEvent.__table__
@@ -87,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(demo_router)
     app.include_router(dev_router)
     app.include_router(me_router)
+    app.include_router(multimodal_router)
     app.include_router(resources_router)
     app.include_router(users_router)
     return app

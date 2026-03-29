@@ -38,12 +38,18 @@ class Settings(BaseSettings):
     openai_request_timeout_seconds: float = 30.0
     max_upload_mb: int = 20
     allowed_audio_extensions: str = ".wav,.mp3,.m4a,.ogg,.webm"
-    jwt_secret_key: str = "dev-secret-change-me"
+    jwt_secret_key: str = Field(default="dev-secret-change-me", description="MUST be changed in production")
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 10080
-    auth_optional_for_dev: bool = True
+    auth_optional_for_dev: bool = False
     enable_dev_seed_endpoints: bool = False
     db_echo: bool = False
+    # Audio emotion model (prosody-based, requires speechbrain)
+    audio_emotion_model_enabled: bool = False
+    audio_emotion_model_dir: str = "models/artifacts/audio_emotion_wav2vec2"
+    # Face emotion model (webcam frame analysis, requires deepface + opencv)
+    face_emotion_enabled: bool = False
+    face_emotion_provider: str = "mock"  # "deepface" | "mock"
     auto_create_tables_for_dev: bool = False
     backend_cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
 

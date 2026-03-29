@@ -1,6 +1,7 @@
 import { motion } from "framer-motion"
 import {
   BookOpen02Icon,
+  HeadphonesIcon,
   Home01Icon,
   Mic01Icon,
   SparklesIcon,
@@ -38,6 +39,11 @@ const navigation = [
     label: "Journal",
     to: "/app/journal",
     icon: BookOpen02Icon,
+  },
+  {
+    label: "Library",
+    to: "/app/library",
+    icon: HeadphonesIcon,
   },
 ] as const
 

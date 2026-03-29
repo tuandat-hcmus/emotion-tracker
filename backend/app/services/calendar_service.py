@@ -116,6 +116,23 @@ def _mood_color_token(
     return "neutral"
 
 
+def list_entries_last_n_hours(
+    db: Session,
+    user_id: str,
+    hours: int = 3,
+) -> list[JournalEntry]:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    return (
+        db.query(JournalEntry)
+        .filter(
+            JournalEntry.user_id == user_id,
+            JournalEntry.created_at >= cutoff,
+        )
+        .order_by(JournalEntry.created_at.asc())
+        .all()
+    )
+
+
 def build_checkin_status(
     db: Session,
     user_id: str,
@@ -124,6 +141,7 @@ def build_checkin_status(
 ) -> CheckinStatusResponse:
     entries = list_entries_for_local_date_range(db, user_id, target_date, target_date, tzinfo)
     latest_entry = entries[-1] if entries else None
+    recent_entries = list_entries_last_n_hours(db, user_id, hours=3)
     session_types_present = sorted({entry.session_type for entry in entries})
     return CheckinStatusResponse(
         date=target_date.isoformat(),
@@ -134,6 +152,7 @@ def build_checkin_status(
         latest_entry_id=latest_entry.id if latest_entry else None,
         latest_emotion_label=latest_entry.emotion_label if latest_entry else None,
         latest_risk_level=latest_entry.risk_level if latest_entry else None,
+        current_mood_label=_primary_emotion(recent_entries),
     )
 
 

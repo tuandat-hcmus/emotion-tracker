@@ -17,3 +17,5 @@ frontend/node_modules/
 frontend/dist/
 frontend/build/
 frontend/package-lock.json
+prompt.txt
+progress.md

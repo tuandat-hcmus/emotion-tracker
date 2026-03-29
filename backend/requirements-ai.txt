@@ -5,3 +5,10 @@ sentencepiece>=0.2.0
 huggingface_hub>=0.26.0
 langdetect>=1.0.9
 scikit-learn>=1.5.0
+# Optional: audio prosody emotion (enabled via AUDIO_EMOTION_MODEL_ENABLED=true)
+# speechbrain>=1.0.0
+# librosa>=0.10.0
+# soundfile>=0.12.0
+# Optional: face emotion from webcam frames (enabled via FACE_EMOTION_ENABLED=true, FACE_EMOTION_PROVIDER=deepface)
+# deepface>=0.0.93
+# opencv-python-headless>=4.9.0

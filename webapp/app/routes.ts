@@ -9,5 +9,6 @@ export default [
     route("home", "routes/dashboard-home.tsx"),
     route("chat", "routes/chat.tsx"),
     route("journal", "routes/journal.tsx"),
+    route("library", "routes/library.tsx"),
   ]),
 ] satisfies RouteConfig

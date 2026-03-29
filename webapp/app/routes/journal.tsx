@@ -44,28 +44,6 @@ const ENTRY_SESSION_TYPES = ["free", "morning", "evening"] as const
 
 type EntrySessionType = (typeof ENTRY_SESSION_TYPES)[number]
 
-const SESSION_TYPE_OPTIONS: Array<{
-  value: EntrySessionType
-  label: string
-  description: string
-}> = [
-  {
-    value: "free",
-    label: "Flexible",
-    description: "General check-in at any time.",
-  },
-  {
-    value: "morning",
-    label: "Morning",
-    description: "Counts toward your morning reminder.",
-  },
-  {
-    value: "evening",
-    label: "Evening",
-    description: "Counts toward your evening reminder.",
-  },
-]
-
 function isEntrySessionType(value: string | null): value is EntrySessionType {
   return Boolean(value && ENTRY_SESSION_TYPES.includes(value as EntrySessionType))
 }
@@ -582,18 +560,6 @@ export default function JournalPage() {
     [monthOffset]
   )
   const activeMonthKey = useMemo(() => getMonthKey(activeMonth), [activeMonth])
-  const sessionHelperText = useMemo(() => {
-    if (entrySessionType === "morning") {
-      return "Saving now will count as today's morning check-in."
-    }
-
-    if (entrySessionType === "evening") {
-      return "Saving now will count as today's evening check-in."
-    }
-
-    return "Use flexible for a general note, or switch to morning/evening when you want this entry to satisfy a reminder."
-  }, [entrySessionType])
-
   async function loadJournalMonth(accessToken: string, monthDate: Date) {
     return api.getJournalMonth(
       accessToken,
@@ -769,20 +735,6 @@ export default function JournalPage() {
   )
   const recapBackdropColor = getEmotionColor(recapTreeEmotion)
 
-  function updateEntrySession(nextSessionType: EntrySessionType) {
-    setEntrySessionType(nextSessionType)
-
-    const nextSearchParams = new URLSearchParams(searchParams)
-
-    if (nextSessionType === "free") {
-      nextSearchParams.delete("session")
-    } else {
-      nextSearchParams.set("session", nextSessionType)
-    }
-
-    setSearchParams(nextSearchParams, { replace: true })
-  }
-
   async function handleSaveEntry() {
     if (!token) {
       setComposerError("Please sign in before saving a check-in.")
@@ -889,45 +841,17 @@ export default function JournalPage() {
               </p>
             </div>
 
-            <MicTranscriptButton
-              token={token}
-              disabled={isSubmittingEntry}
-              onTranscriptReady={(transcript) => {
-                setDraftText(transcript)
-                setComposerError(null)
-                setComposerNotice("Transcript ready. Review it, then save.")
-              }}
-            />
-          </div>
-
-          <div className="mt-5">
-            <label className="block text-sm font-medium text-[#163D33]">
-              Check-in type
-            </label>
-            <div className="mt-2 grid gap-2 sm:grid-cols-3">
-              {SESSION_TYPE_OPTIONS.map((option) => {
-                const isActive = option.value === entrySessionType
-
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => updateEntrySession(option.value)}
-                    className={`rounded-[1.35rem] border px-4 py-3 text-left transition-colors ${
-                      isActive
-                        ? "border-[var(--brand-primary)] bg-[var(--brand-primary-soft)] shadow-[0_12px_28px_rgba(18,199,127,0.12)]"
-                        : "border-[#DDF5EA] bg-white/88 hover:bg-[#F8FFFC]"
-                    }`}
-                  >
-                    <p className="text-sm font-semibold text-[#163D33]">{option.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-[#648078]">
-                      {option.description}
-                    </p>
-                  </button>
-                )
-              })}
+            <div className="flex items-center gap-2">
+              <MicTranscriptButton
+                token={token}
+                disabled={isSubmittingEntry}
+                onTranscriptReady={(transcript) => {
+                  setDraftText(transcript)
+                  setComposerError(null)
+                  setComposerNotice("Transcript ready. Review it, then save.")
+                }}
+              />
             </div>
-            <p className="mt-3 text-sm text-[#648078]">{sessionHelperText}</p>
           </div>
 
           <div className="mt-5">
@@ -1036,20 +960,24 @@ export default function JournalPage() {
                           >
                             {cell.dayNumber}
                           </span>
-                          <span
-                            className="flex h-6 w-6 items-center justify-center rounded-lg sm:h-8 sm:w-8 sm:rounded-xl"
-                            style={{
-                              backgroundColor: cell.entry ? `${moodColor}22` : "#F2FBF7",
-                              color: cell.entry ? moodColor : "#A4BBB4",
-                            }}
-                          >
-                            <HugeiconsIcon
-                              icon={Leaf02Icon}
-                              size={12}
-                              strokeWidth={1.8}
-                              className="sm:size-[15px]"
-                            />
-                          </span>
+                          {cell.entry ? (
+                            <span
+                              className="flex h-6 w-6 items-center justify-center rounded-lg sm:h-8 sm:w-8 sm:rounded-xl"
+                              style={{
+                                backgroundColor: `${moodColor}22`,
+                                color: moodColor,
+                              }}
+                            >
+                              <HugeiconsIcon
+                                icon={Leaf02Icon}
+                                size={12}
+                                strokeWidth={1.8}
+                                className="sm:size-[15px]"
+                              />
+                            </span>
+                          ) : (
+                            <span className="h-6 w-6 sm:h-8 sm:w-8" />
+                          )}
                         </div>
                         <p className="text-[0.58rem] text-[#648078] sm:text-[0.68rem]">
                           {cell.entry?.entry_count ?? 0}

@@ -243,6 +243,7 @@ export type HomeResponse = {
     latest_entry_id: string | null
     latest_emotion_label: string | null
     latest_risk_level: string | null
+    current_mood_label: string | null
     total_entries_today: number
   }
   tree: {
@@ -487,4 +488,27 @@ export type ConversationTurnResult = {
   emotion_analysis: EmotionAnalysis
   response_plan: ResponsePlan
   ai: AIContract
+}
+
+export type MultimodalSessionResponse = {
+  session_id: string
+  user_id: string
+  status: string
+  started_at: string
+}
+
+export type MultimodalSessionDetailResponse = {
+  session_id: string
+  user_id: string
+  journal_entry_id: string | null
+  status: string
+  emotion_label: string | null
+  valence_score: number | null
+  energy_score: number | null
+  stress_score: number | null
+  emotion_confidence: number | null
+  fusion_source: string | null
+  fused_result: Record<string, unknown> | null
+  started_at: string
+  ended_at: string | null
 }

@@ -110,12 +110,14 @@ def build_response_plan(
         plan["follow_up_question_allowed"] = False
 
     if session_mode == "realtime":
-        plan["max_sentences"] = 1
+        plan["max_sentences"] = 2
         plan["quote_allowed"] = False
-        plan["suggestion_allowed"] = False
-        plan["suggestion_style"] = "none"
         if risk_level == "low":
+            plan["suggestion_allowed"] = True
             plan["follow_up_question_allowed"] = True
+        else:
+            plan["suggestion_allowed"] = False
+            plan["follow_up_question_allowed"] = False
     plan["response_mode"] = response_mode
     plan["evidence_bound"] = True
     plan["suggestion_family"] = select_suggestion_family(

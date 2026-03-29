@@ -241,8 +241,9 @@ export function SoulForestProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const homeMood = coerceMood(home?.today.latest_emotion_label)
-    if (homeMood !== "neutral" || home?.today.latest_emotion_label) {
+    const moodSource = home?.today.current_mood_label ?? home?.today.latest_emotion_label
+    const homeMood = coerceMood(moodSource)
+    if (homeMood !== "neutral" || moodSource) {
       setCurrentMood(homeMood)
       return
     }

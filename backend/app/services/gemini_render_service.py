@@ -204,7 +204,7 @@ class GeminiRenderService:
             memory_summary=memory_summary,
         )
         generation_config: dict[str, object] = {
-            "temperature": 0.2,
+            "temperature": 0.55,
             "response_mime_type": "application/json",
             "system_instruction": system_prompt,
         }

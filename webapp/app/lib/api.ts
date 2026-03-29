@@ -11,6 +11,8 @@ import type {
   JournalMonthResponse,
   LoginResponse,
   MonthlyWrapupDetailResponse,
+  MultimodalSessionDetailResponse,
+  MultimodalSessionResponse,
   RegisterRequest,
   RespondPreviewResponse,
   TranscribeAudioResponse,
@@ -390,6 +392,32 @@ export const api = {
       () => mockApi.endConversationSession(token, sessionId)
     )
   },
+  createMultimodalSession(token: string) {
+    return requestJson<MultimodalSessionResponse>("/v1/multimodal/sessions", {
+      method: "POST",
+      token,
+    })
+  },
+  endMultimodalSession(
+    token: string,
+    sessionId: string,
+    payload: { journal_entry_id?: string | null } = {}
+  ) {
+    return requestJson<MultimodalSessionDetailResponse>(
+      `/v1/multimodal/sessions/${sessionId}/end`,
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify(payload),
+      }
+    )
+  },
+  getMultimodalSession(token: string, sessionId: string) {
+    return requestJson<MultimodalSessionDetailResponse>(
+      `/v1/multimodal/sessions/${sessionId}`,
+      { token }
+    )
+  },
 }
 
 export type ConversationSocketEvent =
@@ -411,3 +439,9 @@ export type ConversationSocketEvent =
       type: "error"
       message: string
     }
+
+export type MultimodalSocketEvent =
+  | { type: "face_emotion"; face_detected: true; label: string; confidence: number; scores: Record<string, number> }
+  | { type: "face_emotion"; face_detected: false }
+  | { type: "voice_emotion"; label: string; confidence: number; scores: Record<string, number> }
+  | { type: "error"; message: string }

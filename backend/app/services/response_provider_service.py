@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Protocol
 
 from app.services.gemini_render_service import GeminiRenderService, resolve_render_language
@@ -24,6 +25,105 @@ def has_signal(emotion_analysis: dict[str, object], signal: str) -> bool:
     return signal in {str(item) for item in emotion_analysis.get("dominant_signals", [])}
 
 
+def _pick(options: list[str], seed: str) -> str:
+    """Deterministically pick from options using a hash seed for variety."""
+    index = int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(options)
+    return options[index]
+
+
+# --- Response pools for variety ---
+
+_GREETING_RESPONSES = [
+    "Hey, I'm here with you.",
+    "Hi — take your time. No rush.",
+    "Welcome back. I'm listening whenever you're ready.",
+    "I'm glad you're here.",
+]
+
+_CELEBRATORY_RESPONSES = [
+    "That sounds lighter, and in a good way.",
+    "That sounds like a real exhale. Hold onto that feeling.",
+    "Something shifted in a good direction — I can hear it.",
+    "That's worth pausing on. It sounds genuinely good.",
+]
+
+_LOW_ENERGY_RESPONSES = [
+    "That sounds quietly exhausting. You don't have to push through it right now.",
+    "Low-energy days are real. You don't owe anyone brightness today.",
+    "Sometimes the heaviest days look ordinary from the outside. This one sounds heavy.",
+    "It sounds like you're running on fumes. That's hard.",
+]
+
+_GROUNDING_RESPONSES = [
+    "That sounds like a lot to carry right now.",
+    "There's a lot here, and you don't have to sort through all of it at once.",
+    "It makes sense that this feels overwhelming — there's weight in what you're describing.",
+    "When everything piles up like this, even small things start to feel heavy.",
+]
+
+_STRESS_RESPONSES = [
+    "That sounds like a lot of pressure to carry.",
+    "When pressure builds this fast, it's hard to think straight. That's completely normal.",
+    "The pace you're describing would wear anyone down.",
+    "That kind of pressure is exhausting even before you start solving it.",
+]
+
+_VALIDATION_RESPONSES = [
+    "It makes sense that this is still with you.",
+    "What you're feeling has real reasons behind it.",
+    "You don't need to explain why this matters — it clearly does.",
+    "Your feelings make sense here, even if they're complicated.",
+]
+
+_SADNESS_RESPONSES = [
+    "There's real sadness in what you're sharing. I hear it.",
+    "That kind of ache doesn't need a fix right now — just acknowledgment.",
+    "It sounds like this goes deeper than just a bad day.",
+    "Some sadness just needs space to exist for a while.",
+]
+
+_LONELINESS_RESPONSES = [
+    "Loneliness can be sharp, especially when surrounded by people.",
+    "Feeling disconnected like that is genuinely painful.",
+    "That kind of quiet isolation is harder than most people realize.",
+    "You're not strange for feeling alone in this. It's a real feeling.",
+]
+
+_ANXIETY_RESPONSES = [
+    "That sounds like your mind has been spinning on this.",
+    "Anxiety can make everything feel urgent, even things that can wait.",
+    "When worry takes the wheel, even rest feels impossible.",
+    "It sounds like there's a background hum of worry pulling at you.",
+]
+
+_GENERAL_RESPONSES = [
+    "That seems to be sitting with you.",
+    "I hear something in this that matters to you.",
+    "There's more underneath what you just shared, isn't there?",
+    "Thank you for putting that into words. It's not always easy.",
+    "What you're describing sounds genuinely significant to you.",
+]
+
+_REFLECTIVE_RESPONSES = [
+    "That seems to have stayed with you for a reason.",
+    "Something about this keeps pulling your attention back.",
+    "It sounds like you're still processing this — and that's okay.",
+    "Reflection like this takes courage, even if it doesn't feel like it.",
+]
+
+_MISSING_RESPONSES = [
+    "Missing someone can feel especially close at night.",
+    "That kind of longing is a sign of how much they matter to you.",
+    "The ache of missing someone is one of the most honest feelings there is.",
+]
+
+_GUILT_RESPONSES = [
+    "This sounds like it has been sitting heavily with you.",
+    "Guilt can be relentless, but the fact that you care this much says something.",
+    "You're holding yourself accountable in a way that shows real empathy.",
+]
+
+
 class MockResponseGeneratorProvider:
     def generate(
         self,
@@ -34,12 +134,11 @@ class MockResponseGeneratorProvider:
         response_plan: dict[str, object],
         memory_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
-        del memory_summary
         primary_topic = topic_tags[0] if topic_tags else "daily life"
         lowered_transcript = transcript.casefold()
         language = str(emotion_analysis.get("language", "en")).strip().lower()
         response_mode = str(emotion_analysis["response_mode"])
-        acknowledgment_focus = str(response_plan.get("acknowledgment_focus", "mixed_state"))
+        primary_label = str(emotion_analysis.get("primary_label", "neutral"))
         suggestion_family = response_plan.get("suggestion_family")
         response_variant = str(response_plan.get("response_variant", "empathy_only"))
         render_context = dict(response_plan.get("render_context", {}))
@@ -50,10 +149,17 @@ class MockResponseGeneratorProvider:
         event_type = str(render_context.get("event_type") or "")
         other_person_emotion_word = str(render_context.get("other_person_emotion_word") or "")
         response_goal = str(support_strategy.get("response_goal") or "")
-        short_personal_update = bool(render_context.get("short_personal_update"))
-        reflective_checkin = bool(render_context.get("reflective_checkin"))
         low_energy_update = bool(render_context.get("low_energy_update"))
         positive_personal_update = bool(render_context.get("positive_personal_update"))
+        reflective_checkin = bool(render_context.get("reflective_checkin"))
+
+        # Build a seed for deterministic variety based on transcript content
+        seed = transcript.strip()[:80]
+
+        # Check memory for conversation continuity
+        memory_turns = 0
+        if memory_summary:
+            memory_turns = int(memory_summary.get("turn_count", 0) or 0)
 
         def _target_phrase() -> str:
             if concern_target and concern_target != "named_person":
@@ -64,49 +170,15 @@ class MockResponseGeneratorProvider:
 
         def _other_person_reflection() -> str:
             target = _target_phrase()
-            if concern_target == "friend":
-                return "Seeing your friend seem this down can really stay with you."
-            if concern_target in {"crush", "partner", "girlfriend", "boyfriend", "wife", "husband"}:
-                observed = other_person_emotion_word or "off"
-                return f"It can feel unsettling when {target} seems {observed}."
             observed = other_person_emotion_word or "off"
-            return f"Seeing {target} seem {observed} can sit heavily with you."
-
-        def _stress_reflection() -> str:
-            if "can't keep up" in lowered_transcript or "cannot keep up" in lowered_transcript:
-                return "Feeling like you can't keep up can get exhausting fast."
-            if "deadline" in lowered_transcript:
-                return "That deadline pressure sounds heavy."
-            return "That sounds like a lot of pressure to carry."
-
-        def _supportive_reflection() -> str:
-            if "check in" in lowered_transcript:
-                return "I'm glad you checked in."
-            if "nothing big happened" in lowered_transcript or "ordinary" in lowered_transcript or "normal day" in lowered_transcript:
-                return "A quieter day still counts."
-            if "miss " in lowered_transcript:
-                return "Missing someone can feel especially close at night."
-            if "should have" in lowered_transcript or "wish i could take it back" in lowered_transcript:
-                return "That seems to be lingering with you."
-            if "lighter than yesterday" in lowered_transcript or "a little easier" in lowered_transcript:
-                return "It sounds a little lighter today."
-            if "not as stuck" in lowered_transcript:
-                return "Even a small shift away from stuck can matter."
-            if "calmer" in lowered_transcript:
-                return "It sounds a little steadier right now."
-            if "interrupt" in lowered_transcript or "annoyed" in lowered_transcript:
-                return "That would wear on you."
-            if low_energy_update or event_type == "exhaustion_or_flatness":
-                if "empty" in lowered_transcript or "flat" in lowered_transcript:
-                    return "That sounds flat and draining."
-                return "That sounds like a low-energy kind of day."
-            if positive_personal_update:
-                return "There is something a little lighter in this."
-            if reflective_checkin:
-                return "That seems to have stayed with you."
-            if short_personal_update:
-                return "I'm here with you."
-            return "That seems to be sitting with you."
+            options = [
+                f"Seeing {target} seem {observed} can sit heavily with you.",
+                f"It sounds like you're carrying some of what {target} is going through.",
+                f"Worrying about {target} while managing your own feelings is a lot.",
+            ]
+            if concern_target == "friend":
+                options.append("Seeing your friend struggle like this can really stay with you.")
+            return _pick(options, seed)
 
         if language == "vi":
             primary_topic = topic_tags[0] if topic_tags else "đời sống hằng ngày"
@@ -128,7 +200,7 @@ class MockResponseGeneratorProvider:
             elif response_mode == "stress_supportive":
                 empathetic_text = (
                     f"Nghe như áp lực quanh chuyện {primary_topic} đang chồng lên nhau rất nhanh. "
-                    "Khi mọi thứ cứ dồn dập như vậy, cảm giác không theo kịp thực sự rất mệt và khó gánh."
+                    "Khi mọi thứ cứ dồn dập như vậy, cảm giác không theo kịp thực sự rất mệt."
                 )
             elif response_mode == "validating_gentle":
                 empathetic_text = (
@@ -175,42 +247,56 @@ class MockResponseGeneratorProvider:
                 "debug": {"renderer_selected": "mock", "render_language": "vi"},
             }
 
+        # --- English responses with variety ---
+
         if event_type == "greeting_or_opening":
-            empathetic_text = "Hey, I'm here with you."
+            empathetic_text = _pick(_GREETING_RESPONSES, seed)
         elif user_stance == "worried_about_other":
             empathetic_text = _other_person_reflection()
         elif user_stance == "guilty_toward_other":
-            empathetic_text = (
-                "This sounds like it has been sitting heavily with you."
-            )
+            empathetic_text = _pick(_GUILT_RESPONSES, seed)
         elif response_goal == "reinforce_positive_moment" and response_mode == "celebratory_warm":
-            empathetic_text = (
-                "That sounds like a real exhale."
-            )
+            empathetic_text = _pick(_CELEBRATORY_RESPONSES, seed)
         elif response_mode == "celebratory_warm":
-            empathetic_text = (
-                "That sounds lighter, and in a good way."
-            )
+            empathetic_text = _pick(_CELEBRATORY_RESPONSES, seed)
         elif response_mode == "low_energy_comfort":
-            empathetic_text = (
-                "That sounds quietly exhausting."
-            )
+            empathetic_text = _pick(_LOW_ENERGY_RESPONSES, seed)
         elif response_mode == "grounding_soft":
-            empathetic_text = (
-                "That sounds like a lot to carry right now."
-            )
+            empathetic_text = _pick(_GROUNDING_RESPONSES, seed)
         elif response_mode == "stress_supportive":
-            empathetic_text = _stress_reflection()
+            empathetic_text = _pick(_STRESS_RESPONSES, seed)
         elif response_mode == "validating_gentle":
-            empathetic_text = (
-                "It makes sense that this is still with you."
-            )
+            empathetic_text = _pick(_VALIDATION_RESPONSES, seed)
         else:
-            empathetic_text = _supportive_reflection()
-            if has_signal(emotion_analysis, "positive_affect") and acknowledgment_focus == "emotion_complexity":
-                empathetic_text = (
-                    "There is something a little lighter in this too."
-                )
+            # Emotion-aware selection
+            if primary_label in ("sadness", "sad"):
+                empathetic_text = _pick(_SADNESS_RESPONSES, seed)
+            elif primary_label in ("loneliness", "lonely"):
+                empathetic_text = _pick(_LONELINESS_RESPONSES, seed)
+            elif primary_label in ("anxiety", "anxious", "fear"):
+                empathetic_text = _pick(_ANXIETY_RESPONSES, seed)
+            elif "miss " in lowered_transcript:
+                empathetic_text = _pick(_MISSING_RESPONSES, seed)
+            elif reflective_checkin:
+                empathetic_text = _pick(_REFLECTIVE_RESPONSES, seed)
+            elif positive_personal_update:
+                empathetic_text = _pick(_CELEBRATORY_RESPONSES, seed)
+            elif low_energy_update or event_type == "exhaustion_or_flatness":
+                empathetic_text = _pick(_LOW_ENERGY_RESPONSES, seed)
+            else:
+                empathetic_text = _pick(_GENERAL_RESPONSES, seed)
+
+            if has_signal(emotion_analysis, "positive_affect"):
+                empathetic_text = _pick(_CELEBRATORY_RESPONSES, seed)
+
+        # Add continuity for multi-turn conversations
+        if memory_turns > 1:
+            continuity_prefix = _pick([
+                "Staying with what you shared — ",
+                "Building on that — ",
+                "Hearing you further — ",
+            ], seed + str(memory_turns))
+            empathetic_text = continuity_prefix.lower() + empathetic_text[0].lower() + empathetic_text[1:]
 
         suggestion_text = build_suggestion_text(
             suggestion_family=str(suggestion_family) if suggestion_family is not None else None,
