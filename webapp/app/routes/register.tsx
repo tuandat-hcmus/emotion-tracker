@@ -74,7 +74,7 @@ export default function RegisterPage() {
         email: email.trim(),
         password,
       })
-      navigate("/app/home")
+      navigate("/onboarding")
     } catch (submitError) {
       setError(
         submitError instanceof Error

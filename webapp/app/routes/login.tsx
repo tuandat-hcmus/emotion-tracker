@@ -57,7 +57,8 @@ export default function LoginPage() {
 
     try {
       await login(email.trim(), password)
-      navigate("/app/home")
+      const done = localStorage.getItem("eflow_onboarding_done")
+      navigate(done ? "/app/home" : "/onboarding")
     } catch (submitError) {
       setError(
         submitError instanceof Error

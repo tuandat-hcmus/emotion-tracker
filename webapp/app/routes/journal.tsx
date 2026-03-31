@@ -1,18 +1,22 @@
 import { AnimatePresence, motion } from "framer-motion"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Cancel01Icon,
+  CubeIcon,
+  LinkSquare01Icon,
   PencilEdit02Icon,
   Leaf02Icon,
   NoteIcon,
+  Share01Icon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons"
 import { useSearchParams } from "react-router"
 
 import { DeferredSoulTree } from "~/components/home/deferred-soul-tree"
+import { MonthlyGarden3D, type GardenDay } from "~/components/journal/monthly-garden-3d"
 import { useAuth } from "~/context/auth-context"
 import { useSoulForest } from "~/context/soul-forest-context"
 import { MicTranscriptButton } from "~/components/journal/mic-transcript-button"
@@ -106,6 +110,11 @@ type CalendarCell = {
   isCurrentMonth: boolean
 }
 
+/** Returns YYYY-MM-DD using LOCAL date parts, avoiding UTC-shift bugs. */
+function localDateISO(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+}
+
 function buildMonthCells(
   monthDate: Date,
   calendarMap: Map<string, CalendarDayItem>
@@ -118,7 +127,7 @@ function buildMonthCells(
   return Array.from({ length: 42 }).map((_, index) => {
     const date = new Date(gridStart)
     date.setDate(gridStart.getDate() + index)
-    const isoDate = date.toISOString().slice(0, 10)
+    const isoDate = localDateISO(date)
 
     return {
       date: isoDate,
@@ -345,46 +354,77 @@ function MonthRecapTeaser({
   cardsCount,
   dominantMood,
   label,
+  monthLabel,
   onOpen,
+  onOpen3D,
+  onShare,
   subtitle,
 }: {
   cardsCount: number
   dominantMood: SoulEmotion
   label: string
+  monthLabel: string
   onOpen: () => void
+  onOpen3D: () => void
+  onShare: () => void
   subtitle: string
 }) {
   const moodColor = getEmotionColor(dominantMood)
 
   return (
-    <div className="mt-4 flex w-full items-center justify-between gap-4 rounded-[1.8rem] border border-[#DDF5EA] bg-[linear-gradient(135deg,#F2FFF8,#FFFFFF)] p-4 text-left shadow-[0_16px_44px_rgba(17,70,62,0.06)]">
-      <div className="min-w-0 flex-1">
-        <p className="text-xs uppercase tracking-[0.22em] text-[var(--brand-primary-muted)]">
-          Monthly recap
-        </p>
-        <h3 className="mt-2 text-lg font-semibold text-[#163D33]">{label}</h3>
-        <p className="mt-1 text-sm text-[#648078]">{subtitle}</p>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="mt-4 inline-flex items-center rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-on-primary)] transition-colors hover:bg-[var(--brand-primary-strong)]"
-        >
-          View recap
-        </button>
-      </div>
+    <div className="mt-4 w-full rounded-[1.8rem] border border-[#DDF5EA] bg-[linear-gradient(135deg,#F2FFF8,#FFFFFF)] p-4 shadow-[0_16px_44px_rgba(17,70,62,0.06)]">
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.22em] text-[var(--brand-primary-muted)]">
+            Monthly recap
+          </p>
+          <h3 className="mt-1.5 text-lg font-semibold text-[#163D33]">{label}</h3>
+          <p className="mt-0.5 text-sm text-[#648078]">{subtitle}</p>
+        </div>
 
-      <div className="shrink-0 text-right">
         <span
-          className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl"
-          style={{
-            backgroundColor: `${moodColor}1f`,
-            color: moodColor,
-          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: `${moodColor}1f`, color: moodColor }}
         >
           <HugeiconsIcon icon={SparklesIcon} size={20} strokeWidth={1.8} />
         </span>
-        <p className="mt-2 text-xs text-[#648078]">{cardsCount} cards</p>
       </div>
+
+      {/* Action buttons */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {/* Primary: open classic recap */}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="inline-flex items-center gap-1.5 rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-on-primary)] transition-colors hover:bg-[var(--brand-primary-strong)]"
+        >
+          <HugeiconsIcon icon={NoteIcon} size={15} strokeWidth={1.8} />
+          View recap
+        </button>
+
+        {/* 3D Garden */}
+        <button
+          type="button"
+          onClick={onOpen3D}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#DDF5EA] bg-white/80 px-4 py-2 text-sm font-medium text-[#163D33] transition-colors hover:bg-[#F0FFF7]"
+        >
+          <HugeiconsIcon icon={CubeIcon} size={15} strokeWidth={1.8} />
+          3D Garden
+        </button>
+
+        {/* Share */}
+        <button
+          type="button"
+          onClick={onShare}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#DDF5EA] bg-white/80 px-4 py-2 text-sm font-medium text-[#163D33] transition-colors hover:bg-[#F0FFF7]"
+        >
+          <HugeiconsIcon icon={Share01Icon} size={15} strokeWidth={1.8} />
+          Share
+        </button>
+      </div>
+
+      <p className="mt-3 text-xs text-[#A4BBB4]">{cardsCount} story cards · {monthLabel}</p>
     </div>
   )
 }
@@ -544,9 +584,11 @@ export default function JournalPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = useState(false)
   const [isRecapOpen, setIsRecapOpen] = useState(false)
+  const [isGarden3D, setIsGarden3D] = useState(false)
+  const [shareNotice, setShareNotice] = useState<string | null>(null)
   const [monthOffset, setMonthOffset] = useState(0)
   const [recapIndex, setRecapIndex] = useState(0)
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10))
+  const [selectedDate, setSelectedDate] = useState<string>(localDateISO(new Date()))
   const [draftText, setDraftText] = useState("")
   const [composerError, setComposerError] = useState<string | null>(null)
   const [composerNotice, setComposerNotice] = useState<string | null>(null)
@@ -683,6 +725,51 @@ export default function JournalPage() {
     [activeMonth, activeMonthWrapup, monthCalendar, monthEntries]
   )
 
+  const gardenDays = useMemo<GardenDay[]>(() => {
+    return monthCalendar.map((item) => {
+      const dayNum = new Date(item.date + "T00:00:00").getDate()
+      const intensity = Math.min(
+        1,
+        0.3 +
+          (item.average_valence_score ?? 0) * 0.4 +
+          Math.min(item.entry_count * 0.1, 0.3)
+      )
+      return {
+        day: dayNum,
+        emotion: item.primary_emotion_label ?? "neutral",
+        intensity,
+        hasEntry: item.entry_count > 0,
+      }
+    })
+  }, [monthCalendar])
+
+  const shareRecap = useCallback(async () => {
+    const { dominantMood, monthLabel, subtitle, cards } = monthRecap
+    const daysTracked = monthCalendar.filter((d) => d.entry_count > 0).length
+    const text =
+      `🌱 My ${monthLabel} emotional recap — eFlow\n\n` +
+      `Mood: ${formatEmotionLabel(dominantMood)}  •  ${daysTracked} days tracked\n` +
+      `${subtitle}\n\n` +
+      cards
+        .slice(0, 2)
+        .map((c) => `${c.eyebrow}: ${c.stat}`)
+        .join("\n") +
+      "\n\neFlow — your emotional garden 🌸"
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `${monthLabel} recap`, text })
+        setShareNotice(null)
+      } catch {
+        // user cancelled — ignore
+      }
+    } else {
+      await navigator.clipboard.writeText(text)
+      setShareNotice("Copied to clipboard!")
+      setTimeout(() => setShareNotice(null), 2800)
+    }
+  }, [monthRecap, monthCalendar])
+
   useEffect(() => {
     if (!token || selectedEntries.length === 0) {
       setSelectedDetails({})
@@ -767,7 +854,7 @@ export default function JournalPage() {
         setSearchParams(nextSearchParams, { replace: true })
       }
       setMonthOffset(0)
-      setSelectedDate(new Date().toISOString().slice(0, 10))
+      setSelectedDate(localDateISO(new Date()))
       await refreshHome()
       const journalMonth = await loadJournalMonth(token, startOfMonth(new Date()))
       setCalendar(journalMonth.calendar_items)
@@ -992,12 +1079,25 @@ export default function JournalPage() {
                 cardsCount={monthRecap.cards.length}
                 dominantMood={monthRecap.dominantMood}
                 label={`${monthRecap.monthLabel} stories`}
+                monthLabel={monthRecap.monthLabel}
                 onOpen={() => {
+                  setIsGarden3D(false)
                   setRecapIndex(0)
                   setIsRecapOpen(true)
                 }}
+                onOpen3D={() => {
+                  setIsGarden3D(true)
+                  setRecapIndex(0)
+                  setIsRecapOpen(true)
+                }}
+                onShare={shareRecap}
                 subtitle={monthRecap.subtitle}
               />
+              {shareNotice && (
+                <p className="mt-2 text-center text-xs text-[var(--brand-primary-muted)]">
+                  {shareNotice}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1075,63 +1175,126 @@ export default function JournalPage() {
                       {monthRecap.monthLabel}
                     </p>
                   </div>
-                  <DialogClose className="flex h-9 w-9 items-center justify-center rounded-full bg-white/12 text-white transition-colors hover:bg-white/20">
-                    <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
-                    <span className="sr-only">Close recap</span>
-                  </DialogClose>
-                </div>
 
-                <div className="mt-3 flex gap-2">
-                  {monthRecap.cards.map((card, index) => (
+                  <div className="flex items-center gap-2">
+                    {/* 2D / 3D toggle */}
                     <button
-                      key={card.id}
                       type="button"
-                      onClick={() => setRecapIndex(index)}
-                      className="h-1.5 flex-1 rounded-full transition-opacity"
-                      style={{
-                        backgroundColor:
-                          index === recapIndex ? "#ffffff" : "rgba(255,255,255,0.28)",
-                        opacity: index === recapIndex ? 1 : 0.75,
-                      }}
-                      aria-label={`Open recap card ${index + 1}`}
-                    />
-                  ))}
+                      onClick={() => setIsGarden3D((v) => !v)}
+                      className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3 py-1.5 text-[0.68rem] font-medium text-white transition-colors hover:bg-white/20"
+                    >
+                      <span>{isGarden3D ? "Classic" : "3D Garden"}</span>
+                      <span className="opacity-70">{isGarden3D ? "↩" : "✦"}</span>
+                    </button>
+
+                    <DialogClose className="flex h-9 w-9 items-center justify-center rounded-full bg-white/12 text-white transition-colors hover:bg-white/20">
+                      <HugeiconsIcon icon={Cancel01Icon} size={18} strokeWidth={1.8} />
+                      <span className="sr-only">Close recap</span>
+                    </DialogClose>
+                  </div>
                 </div>
+
+                {!isGarden3D && (
+                  <div className="mt-3 flex gap-2">
+                    {monthRecap.cards.map((card, index) => (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => setRecapIndex(index)}
+                        className="h-1.5 flex-1 rounded-full transition-opacity"
+                        style={{
+                          backgroundColor:
+                            index === recapIndex ? "#ffffff" : "rgba(255,255,255,0.28)",
+                          opacity: index === recapIndex ? 1 : 0.75,
+                        }}
+                        aria-label={`Open recap card ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div className="absolute inset-x-3 bottom-3 z-20 rounded-[1.35rem] border border-white/12 bg-black/18 p-3 text-white shadow-[0_18px_40px_rgba(0,0,0,0.2)] backdrop-blur-xl">
-                <div className="flex items-center justify-between gap-3">
+              {!isGarden3D && (
+                <div className="absolute inset-x-3 bottom-3 z-20 space-y-2 rounded-[1.35rem] border border-white/12 bg-black/18 p-3 text-white shadow-[0_18px_40px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+                  {/* Prev / counter / Next */}
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setRecapIndex((current) => Math.max(0, current - 1))}
+                      disabled={recapIndex === 0}
+                      className="flex items-center gap-2 rounded-full border border-white/14 bg-white/8 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={1.8} />
+                      Prev
+                    </button>
+
+                    <p className="text-sm text-white/70">
+                      {recapIndex + 1} / {monthRecap.cards.length}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRecapIndex((current) =>
+                          Math.min(monthRecap.cards.length - 1, current + 1)
+                        )
+                      }
+                      disabled={recapIndex === monthRecap.cards.length - 1}
+                      className="flex items-center gap-2 rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-on-primary)] transition-colors hover:bg-[var(--brand-primary-strong)] disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      Next
+                      <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} />
+                    </button>
+                  </div>
+
+                  {/* Share row */}
                   <button
                     type="button"
-                    onClick={() => setRecapIndex((current) => Math.max(0, current - 1))}
-                    disabled={recapIndex === 0}
-                    className="flex items-center gap-2 rounded-full border border-white/14 bg-white/8 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-45"
+                    onClick={() => { void shareRecap() }}
+                    className="flex w-full items-center justify-center gap-2 rounded-full border border-white/14 bg-white/8 py-2 text-sm font-medium text-white transition-colors hover:bg-white/16"
                   >
-                    <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={1.8} />
-                    Previous
-                  </button>
-
-                  <p className="text-sm text-white/70">
-                    {recapIndex + 1} / {monthRecap.cards.length}
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRecapIndex((current) =>
-                        Math.min(monthRecap.cards.length - 1, current + 1)
-                      )
-                    }
-                    disabled={recapIndex === monthRecap.cards.length - 1}
-                    className="flex items-center gap-2 rounded-full bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-on-primary)] transition-colors hover:bg-[var(--brand-primary-strong)] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    Next
-                    <HugeiconsIcon icon={ArrowRight01Icon} size={16} strokeWidth={1.8} />
+                    <HugeiconsIcon icon={Share01Icon} size={15} strokeWidth={1.8} />
+                    Share this recap
                   </button>
                 </div>
-              </div>
+              )}
 
-              <div className="relative z-10 flex h-full items-center justify-center px-3 pb-20 pt-20">
+              {/* 3D Garden view */}
+              {isGarden3D && (
+                <div className="absolute inset-x-3 bottom-3 top-[5.5rem] z-10 overflow-hidden rounded-[1.75rem]">
+                  <MonthlyGarden3D
+                    days={gardenDays}
+                    monthNumber={activeMonth.getMonth() + 1}
+                    className="h-full w-full"
+                  />
+                  {/* 3D bottom bar */}
+                  <div className="absolute inset-x-3 bottom-3 z-20 flex items-center justify-between gap-2 rounded-[1.2rem] bg-black/40 px-3 py-2.5 backdrop-blur-md">
+                    <p className="text-[0.62rem] text-white/60">
+                      Auto-rotating · each pot = one day
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { void shareRecap() }}
+                        className="flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-[0.72rem] font-medium text-white transition-colors hover:bg-white/20"
+                      >
+                        <HugeiconsIcon icon={Share01Icon} size={13} strokeWidth={1.8} />
+                        Share
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsGarden3D(false)}
+                        className="flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-[0.72rem] font-medium text-white transition-colors hover:bg-white/20"
+                      >
+                        <HugeiconsIcon icon={LinkSquare01Icon} size={13} strokeWidth={1.8} />
+                        Classic
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className={`relative z-10 flex h-full items-center justify-center px-3 pb-20 pt-20 ${isGarden3D ? "invisible" : ""}`}>
                 <div className="pointer-events-none absolute inset-[0.75rem] z-0 overflow-hidden rounded-[1.75rem] border border-white/12 bg-black/18 shadow-[0_30px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
                   <DeferredSoulTree
                     emotion={recapTreeEmotion}

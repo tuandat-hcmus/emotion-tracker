@@ -49,14 +49,29 @@ def _load_local_model_bundle(model_dir: str, device_name: str) -> LocalEmotionMo
     _prepare_runtime_environment()
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-    model_path = Path(model_dir)
-    artifact_meta = json.loads((model_path / ARTIFACT_META_NAME).read_text(encoding="utf-8"))
+    model_path = Path(model_dir).resolve()
+    logger.info("emotion_provider=%s loading from resolved path=%s", LOCAL_PROVIDER_NAME, model_path)
+
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"emotion_provider={LOCAL_PROVIDER_NAME} model directory not found: {model_path}. "
+            "Ensure the model files are mounted or downloaded before starting the service."
+        )
+
+    artifact_meta_path = model_path / ARTIFACT_META_NAME
+    if not artifact_meta_path.exists():
+        raise FileNotFoundError(
+            f"emotion_provider={LOCAL_PROVIDER_NAME} missing required file: {artifact_meta_path}. "
+            f"Directory contents: {[p.name for p in model_path.iterdir()]}"
+        )
+
+    artifact_meta = json.loads(artifact_meta_path.read_text(encoding="utf-8"))
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSequenceClassification.from_pretrained(model_path)
     device = _resolve_device(device_name)
     model.to(device)
     model.eval()
-    logger.info("emotion_provider=%s model_dir=%s device=%s", LOCAL_PROVIDER_NAME, model_dir, device)
+    logger.info("emotion_provider=%s model_dir=%s device=%s labels=%s", LOCAL_PROVIDER_NAME, model_path, device, artifact_meta.get("labels"))
     return LocalEmotionModelBundle(
         tokenizer=tokenizer,
         model=model,
